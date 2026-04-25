@@ -62,6 +62,66 @@ export class CubeBackendClient {
     return this.get<PoolSummary>(`/api/pools/${addr}`);
   }
 
+  /**
+   * Raw pool-list response in the same envelope the backend returns
+   * (`{ data, hasMore, totalCount }`). Kept so the frontend's React
+   * Query hooks can map directly.
+   */
+  listPoolsRaw(
+    limit: number,
+    offset: number
+  ): Promise<SdkResult<{ data: unknown[]; hasMore: boolean; totalCount: number }>> {
+    const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    return this.getEnvelope(`/api/pools?${qs.toString()}`);
+  }
+
+  getPoolRaw(addr: string): Promise<SdkResult<unknown>> {
+    return this.getDataField<unknown>(`/api/pools/${addr}`);
+  }
+
+  createPool<T>(body: unknown): Promise<SdkResult<T>> {
+    return this.postDataField<T>("/api/pools", body);
+  }
+
+  getPoolsByTokenPair<T>(tokenA: string, tokenB: string): Promise<SdkResult<T>> {
+    const qs = new URLSearchParams({ tokenA, tokenB });
+    return this.getDataField<T>(`/api/pools/by-pair?${qs.toString()}`);
+  }
+
+  getPlatformStats<T>(): Promise<SdkResult<T>> {
+    return this.getDataField<T>("/api/pools/stats");
+  }
+
+  getPortfolio<T>(owner: string): Promise<SdkResult<T>> {
+    return this.getDataField<T>(`/api/pools/portfolio?owner=${encodeURIComponent(owner)}`);
+  }
+
+  getAllTokens<T>(): Promise<SdkResult<T>> {
+    return this.getDataField<T>("/api/pools/tokens");
+  }
+
+  getTopTokens<T>(limit: number = 20): Promise<SdkResult<T>> {
+    return this.getDataField<T>(`/api/pools/top-tokens?limit=${limit}`);
+  }
+
+  getPoolTxStats<T>(addr: string): Promise<SdkResult<T>> {
+    return this.getDataField<T>(`/api/pools/${addr}/tx-stats`);
+  }
+
+  getTransactions<T>(addr: string, limit: number = 20, offset: number = 0): Promise<SdkResult<T>> {
+    const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    return this.getDataField<T>(`/api/pools/${addr}/transactions?${qs.toString()}`);
+  }
+
+  getSwapRoute<T>(
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: string
+  ): Promise<SdkResult<T>> {
+    const qs = new URLSearchParams({ tokenIn, tokenOut, amountIn });
+    return this.getDataField<T>(`/api/swap/route?${qs.toString()}`);
+  }
+
   getTokenPrices(mints: string[]): Promise<SdkResult<PriceMap>> {
     const qs = new URLSearchParams({ mints: mints.join(",") });
     return this.get<PriceMap>(`/api/prices?${qs.toString()}`);
@@ -107,5 +167,27 @@ export class CubeBackendClient {
     });
     if (!raw.ok) return raw;
     return ok(raw.data);
+  }
+
+  /**
+   * Fetch a response envelope of the form `{ data: T, ... }` and unwrap
+   * the `.data` field. The existing Cube backend wraps most endpoints
+   * this way.
+   */
+  private async getDataField<T>(path: string): Promise<SdkResult<T>> {
+    const res = await this.get<{ data: T }>(path);
+    if (!res.ok) return res;
+    return ok(res.data?.data);
+  }
+
+  private async postDataField<T>(path: string, body: unknown): Promise<SdkResult<T>> {
+    const res = await this.post<{ data: T }>(path, body);
+    if (!res.ok) return res;
+    return ok(res.data?.data);
+  }
+
+  /** Fetch the full envelope (for endpoints that return meta alongside data). */
+  private async getEnvelope<T>(path: string): Promise<SdkResult<T>> {
+    return this.get<T>(path);
   }
 }
