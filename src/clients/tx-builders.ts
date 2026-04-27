@@ -319,9 +319,11 @@ export function buildSingleTokenDepositIx(
 }
 
 /**
- * Full single-token deposit tx: makes sure helper ATAs exist (idempotent
- * create instructions), creates the user's BPT ATA if absent, then the
- * deposit ix itself. CU limit set to 1.4M (mainnet/devnet max).
+ * Full single-token deposit tx: makes sure helper ATAs and the user's
+ * per-token ATAs exist (idempotent create instructions), creates the user's
+ * BPT ATA if absent, then the deposit ix itself. The helper program validates
+ * all user ATAs up front because it may refund dust for any pool token.
+ * CU limit set to 1.4M (mainnet/devnet max).
  */
 export function buildSingleTokenDepositTx(
   cfg: CubeConfig,
@@ -335,9 +337,20 @@ export function buildSingleTokenDepositTx(
   const ixs: TransactionInstruction[] = [
     ComputeBudgetProgram.setComputeUnitLimit({ units: cfg.defaults.cuLimit }),
   ];
-  // Helper ATAs (off-curve owner; per-token). Idempotent — safe to spam.
+  // User + helper ATAs (helper has an off-curve owner). Idempotent — safe to
+  // include even when the accounts already exist.
   for (const t of pool.tokens) {
+    const userAta = deriveAta(params.user, t.mint, t.tokenProgram);
     const helperAta = deriveAta(helper, t.mint, t.tokenProgram);
+    ixs.push(
+      createAssociatedTokenAccountIdempotentInstruction(
+        params.user,
+        userAta,
+        params.user,
+        t.mint,
+        t.tokenProgram
+      )
+    );
     ixs.push(
       createAssociatedTokenAccountIdempotentInstruction(
         params.user,
