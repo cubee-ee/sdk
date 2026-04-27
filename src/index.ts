@@ -19,6 +19,7 @@ export * from "./utils";
 export * from "./math";
 export * from "./parsers";
 export * from "./clients";
+export * from "./idl";
 
 // Explicit runtime re-exports keep CommonJS output statically discoverable for
 // Vite/Rollup consumers that import named exports from the package root.
@@ -63,7 +64,7 @@ export {
   calcSpotOut,
 } from "./math/cubicMath";
 export { validateWeights, calcSpotPrice } from "./math/weightedMath";
-export { computeAllocations } from "./math/singleToken";
+export { computeAllocations, computeTwoTokenOptimalAllocations } from "./math/singleToken";
 export { applySlippage, applySwapFee, lpBalances, priceImpactHbps } from "./math/slippage";
 export { RpcClient } from "./clients/RpcClient";
 export { CubeBackendClient } from "./clients/CubeBackendClient";

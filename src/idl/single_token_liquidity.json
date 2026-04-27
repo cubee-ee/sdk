@@ -1,0 +1,533 @@
+{
+  "address": "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u",
+  "metadata": {
+    "name": "single_token_liquidity",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "1-token liquidity provisioning helper for Cubic Pool"
+  },
+  "instructions": [
+    {
+      "name": "deposit_single_token",
+      "docs": [
+        "Single-token deposit: splits `amount_in` of one pool token into the",
+        "proportional basket, swaps the other legs via cubic-pool, deposits the",
+        "basket, mints BPT to the user, and refunds any dust.",
+        "",
+        "- `amount_in`: raw amount of pool_tokens[token_in_index] the user sends",
+        "- `token_in_index`: index into pool.token_mints of the single token",
+        "- `slippage_hundredths_bps`: slippage bound applied to every per-leg",
+        "swap. Units: hundredths of a basis point, same scale as cubic-pool's",
+        "swap_fee_rate (1_000_000 = 100%). Must be in [10 .. 1_000_000],",
+        "i.e. 0.001% .. 100%.",
+        "- `minimum_bpt_amount`: final safety guard on the BPT received.",
+        "",
+        "See `DepositSingleToken` for the remaining_accounts layout."
+      ],
+      "discriminator": [
+        166,
+        136,
+        166,
+        47,
+        199,
+        192,
+        86,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "helper"
+        },
+        {
+          "name": "bpt_mint",
+          "writable": true
+        },
+        {
+          "name": "helper_bpt_account",
+          "writable": true
+        },
+        {
+          "name": "user_bpt_account",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "cubic_pool_program"
+        },
+        {
+          "name": "bpt_token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "token_in_index",
+          "type": "u8"
+        },
+        {
+          "name": "slippage_hundredths_bps",
+          "type": "u32"
+        },
+        {
+          "name": "minimum_bpt_amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CubicPool",
+      "discriminator": [
+        137,
+        210,
+        42,
+        22,
+        209,
+        156,
+        43,
+        78
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "HelperInitialized",
+      "discriminator": [
+        66,
+        82,
+        73,
+        69,
+        146,
+        184,
+        145,
+        242
+      ]
+    },
+    {
+      "name": "SingleTokenDeposit",
+      "discriminator": [
+        215,
+        54,
+        137,
+        104,
+        219,
+        39,
+        164,
+        235
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "ZeroAmount",
+      "msg": "Zero amount"
+    },
+    {
+      "code": 6001,
+      "name": "ZeroFeeAmount",
+      "msg": "Swap amount is too small: fee rounds to zero"
+    },
+    {
+      "code": 6002,
+      "name": "SlippageTooLow",
+      "msg": "Slippage below 0.001%"
+    },
+    {
+      "code": 6003,
+      "name": "SlippageTooHigh",
+      "msg": "Slippage above 100%"
+    },
+    {
+      "code": 6004,
+      "name": "PoolDisabled",
+      "msg": "Pool disabled"
+    },
+    {
+      "code": 6005,
+      "name": "SwapsDisabled",
+      "msg": "Swaps disabled"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidTokenCount",
+      "msg": "Invalid token count"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidTokenIndex",
+      "msg": "Invalid token index"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAccountLayout",
+      "msg": "Invalid remaining_accounts layout"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidMint",
+      "msg": "Invalid mint passed in remaining_accounts"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidTokenProgram",
+      "msg": "Invalid token program passed in remaining_accounts"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidVault",
+      "msg": "Invalid vault: must be ATA(pool, mint, token_program)"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidHelperAta",
+      "msg": "Invalid helper ATA: must be ATA(helper_pda, mint, token_program)"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidUserAta",
+      "msg": "User token account does not match expected owner/mint"
+    },
+    {
+      "code": 6014,
+      "name": "PoolNotSeeded",
+      "msg": "Pool not seeded: need at least one actual_balance > 0"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidVirtualBalance",
+      "msg": "Virtual balance of zero for a token"
+    },
+    {
+      "code": 6016,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6017,
+      "name": "MathUnderflow",
+      "msg": "Math underflow"
+    },
+    {
+      "code": 6018,
+      "name": "ZeroInputAllocation",
+      "msg": "Input token allocation is zero (input token W is zero)"
+    },
+    {
+      "code": 6019,
+      "name": "ZeroExpectedOut",
+      "msg": "Expected swap output is zero"
+    },
+    {
+      "code": 6020,
+      "name": "InsufficientBpt",
+      "msg": "Received BPT less than minimum_bpt_amount"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidHelper",
+      "msg": "Invalid helper PDA"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidBptMint",
+      "msg": "Invalid BPT mint: must be [bpt_mint, pool] PDA in cubic-pool program"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidCubicPoolProgram",
+      "msg": "Invalid Cubic Pool program id"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidUserBptAccount",
+      "msg": "User BPT account mismatch"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidHelperBptAccount",
+      "msg": "Helper BPT account mismatch"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidPoolOwner",
+      "msg": "Pool account is owned by a different program"
+    },
+    {
+      "code": 6027,
+      "name": "PoolHasZeroBalanceToken",
+      "msg": "Pool has at least one token with actual_balance = 0; single-token deposit unsupported in this state"
+    },
+    {
+      "code": 6028,
+      "name": "AmountTooSmall",
+      "msg": "amount_in is too small: truncation would leave a pool token with zero allocation"
+    },
+    {
+      "code": 6029,
+      "name": "PendingProtocolFeesUnsupported",
+      "msg": "Single-token deposit with pending protocol fees is only supported for two-token pools"
+    }
+  ],
+  "types": [
+    {
+      "name": "CubicPool",
+      "docs": [
+        "Cubic Pool account - implements virtual liquidity with weighted balances",
+        "",
+        "## Layout notes:",
+        "- token_vaults REMOVED → derived as ATA(pool, mint, token_programs[i]) at runtime",
+        "- token_decimals REMOVED → read from mint accounts at runtime",
+        "- bpt_mint REMOVED → derived as PDA [BPT_MINT_SEED, pool.key()]",
+        "- bpt_total_supply REMOVED → read from bpt_mint.supply at runtime",
+        "- pool_id ADDED → allows multiple pools per config",
+        "- token_programs: per-token program IDs (SPL Token or Token-2022, can be mixed)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "Reference to the config account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Pool bump seed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_count",
+            "docs": [
+              "Number of tokens in the pool (2-10)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Pool identifier / salt — allows multiple pools per config.",
+              "PDA seeds: [CUBIC_POOL_SEED, config.key(), &pool_id.to_le_bytes()]"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_mints",
+            "docs": [
+              "Token mints (up to 10)"
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                10
+              ]
+            }
+          },
+          {
+            "name": "token_programs",
+            "docs": [
+              "Token programs per token (SPL Token or Token-2022, can be mixed)"
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                10
+              ]
+            }
+          },
+          {
+            "name": "normalized_weights",
+            "docs": [
+              "Normalized weights in basis points (sum to WEIGHT_SCALE = 10000 = 100%)"
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "virtual_balances",
+            "docs": [
+              "Virtual balances for each token (in native token units)"
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "actual_balances",
+            "docs": [
+              "Actual balances for each token"
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "swap_fee_rate",
+            "docs": [
+              "Swap fee rate in hundredths of a basis point (0 to 10000 = 1%)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "protocol_fee_rate",
+            "docs": [
+              "Protocol fee rate in basis points (0 to 5000 = 50% of swap fee)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fees_owed",
+            "docs": [
+              "Protocol fees owed for each token (in native token decimals)"
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Pool creation timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pool_enabled",
+            "docs": [
+              "Pool enabled flag"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "swaps_enabled",
+            "docs": [
+              "Swaps enabled flag"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved for future extensions"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HelperInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "helper",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_count",
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SingleTokenDeposit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "helper",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_in_index",
+            "type": "u8"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "slippage_hundredths_bps",
+            "type": "u32"
+          },
+          {
+            "name": "allocations",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "deposited_amounts",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "bpt_received",
+            "type": "u64"
+          },
+          {
+            "name": "dust_refunded",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -70,6 +70,13 @@ function computeDiscriminator(ixName: string): Buffer {
   return Buffer.from(hex, "hex");
 }
 
+function requirePositiveMinimumBpt(minimumBptAmount: BN | undefined, ixName: string): BN {
+  if (!minimumBptAmount || minimumBptAmount.lte(new BN(0))) {
+    throw new Error(`${ixName}: minimumBptAmount must be positive`);
+  }
+  return minimumBptAmount;
+}
+
 // ============================================================
 // Swap
 // ============================================================
@@ -137,7 +144,7 @@ export function buildAddLiquidityIx(
   params: AddLiquidityParams
 ): TransactionInstruction {
   const userBpt = deriveAta(params.user, pool.bptMint, TOKEN_PROGRAM_ID);
-  const minBpt = params.minimumBptAmount ?? new BN(0);
+  const minBpt = requirePositiveMinimumBpt(params.minimumBptAmount, "add_liquidity");
 
   const data = Buffer.concat([
     CUBIC_POOL_DISC.addLiquidity,
@@ -273,7 +280,7 @@ export function buildSingleTokenDepositIx(
   params: SingleTokenDepositParams
 ): TransactionInstruction {
   const slip = params.slippageHundredthsBps ?? cfg.defaults.slippageHundredthsBps;
-  const minBpt = params.minimumBptAmount ?? new BN(0);
+  const minBpt = requirePositiveMinimumBpt(params.minimumBptAmount, "deposit_single_token");
   const [helper] = deriveHelperPda(cfg.programs.singleTokenLiquidity, pool.address);
   const helperBpt = deriveAta(helper, pool.bptMint, TOKEN_PROGRAM_ID);
   const userBpt = deriveAta(params.user, pool.bptMint, TOKEN_PROGRAM_ID);

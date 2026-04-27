@@ -59,6 +59,7 @@ utils/        Error mapping, retry wrapper (safeCall), PDA helpers
 math/         Pure math — port of cubic-pool + stld Rust math modules
 parsers/      Binary layout decoders for CubicPool / Mint / events
 clients/      RpcClient, CubeBackendClient, CubicPoolClient
+idl/          Anchor IDL exports generated from the current contracts
 examples/     Runnable scripts demonstrating each capability
 ```
 
@@ -72,6 +73,8 @@ throws for I/O or parse errors.
 - All on-chain account parsing (pool, mint, events)
 - All math (quote, allocations, slippage, price impact)
 - All transaction building (swap, add/remove liquidity, single-token deposit, pool deploy)
+- Current Anchor IDLs for `cubic_pool`, `single_token_liquidity`, and
+  `protocol_fees_authority`
 - Retry + fallback for RPC and backend calls
 - Event log decoding
 
