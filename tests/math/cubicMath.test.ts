@@ -45,16 +45,15 @@ describe("cubicMath.calcOutGivenIn", () => {
     expect(asym).toBeGreaterThan(balanced);
   });
 
-  test("amountOut caps at actualBalanceOut", () => {
-    const out = calcOutGivenIn({
+  test("amountOut exceeding actualBalanceOut is rejected", () => {
+    expect(() => calcOutGivenIn({
       virtualBalanceIn: BN_BILLION,
       weightInBps: 5000n,
       virtualBalanceOut: BN_BILLION,
       weightOutBps: 5000n,
       amountIn: BN_BILLION * 100n,
       actualBalanceOut: BN_BILLION / 2n, // ceiling
-    });
-    expect(out).toBeLessThanOrEqual(BN_BILLION / 2n);
+    })).toThrow(/exceeds actual balance/);
   });
 });
 

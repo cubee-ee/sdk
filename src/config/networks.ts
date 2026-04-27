@@ -11,7 +11,7 @@ export interface NetworkPrograms {
 export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
   mainnet: {
     // TODO: fill in on launch
-    cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    cubicPool: new PublicKey("62J6JWH4ubU9uXqHB7SKcgcxG5FgZc4fyJQCE4cEDsjT"),
     singleTokenLiquidity: new PublicKey(
       "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
     ),
@@ -20,7 +20,7 @@ export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
     ),
   },
   devnet: {
-    cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    cubicPool: new PublicKey("62J6JWH4ubU9uXqHB7SKcgcxG5FgZc4fyJQCE4cEDsjT"),
     singleTokenLiquidity: new PublicKey(
       "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
     ),
@@ -29,7 +29,7 @@ export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
     ),
   },
   localnet: {
-    cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    cubicPool: new PublicKey("62J6JWH4ubU9uXqHB7SKcgcxG5FgZc4fyJQCE4cEDsjT"),
     singleTokenLiquidity: new PublicKey(
       "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
     ),

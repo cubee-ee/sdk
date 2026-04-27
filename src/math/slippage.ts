@@ -19,6 +19,9 @@ export function applySlippage(expected: bigint, slippageHbps: number): bigint {
 export function applySwapFee(amount: bigint, swapFeeRate: number): bigint {
   if (swapFeeRate < 0) throw new Error("swapFee: negative rate");
   const fee = (amount * BigInt(swapFeeRate)) / BigInt(SWAP_FEE_PRECISION);
+  if (swapFeeRate > 0 && fee === 0n) {
+    throw new Error("swapFee: amount too small, fee rounds to zero");
+  }
   return amount - fee;
 }
 

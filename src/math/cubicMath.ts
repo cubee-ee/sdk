@@ -28,8 +28,10 @@ export function calcOutGivenIn(params: {
   power = power + 1n;
   if (power > ONE) power = ONE;
   const comp = complement(power);
-  let out = mulDown(virtualBalanceOut, comp);
-  if (out > actualBalanceOut) out = actualBalanceOut;
+  const out = mulDown(virtualBalanceOut, comp);
+  if (out > actualBalanceOut) {
+    throw new Error("cubicMath: amount out exceeds actual balance");
+  }
   return out;
 }
 
