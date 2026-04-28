@@ -193,3 +193,58 @@ export function computeTwoTokenOptimalAllocations(params: {
   allocations[other] = bestSwap;
   return { allocations, wScaled: [], sumW: bestScore };
 }
+
+/**
+ * Mirror of stld `cap_deposit_amounts_to_lp_ratio`.
+ *
+ * `add_liquidity` mints BPT from the minimum ratio against LP-accessible
+ * balances (`actual - protocolFeesOwed`). Any helper-held amount above that
+ * common ratio would be donated, so the helper deposits the capped basket and
+ * refunds the rest.
+ */
+export function capDepositAmountsToLpRatio(params: {
+  helperBalances: bigint[];
+  actualBalances: bigint[];
+  protocolFeesOwed: bigint[];
+}): { depositAmounts: bigint[]; refundAmounts: bigint[]; lpBalancesForAdd: bigint[] } {
+  const { helperBalances, actualBalances, protocolFeesOwed } = params;
+  const n = helperBalances.length;
+  if (n !== actualBalances.length || n !== protocolFeesOwed.length) {
+    throw new Error("capDepositAmountsToLpRatio: length mismatch");
+  }
+
+  const lpBalancesForAdd = actualBalances.map((actual, i) =>
+    actual > protocolFeesOwed[i] ? actual - protocolFeesOwed[i] : 0n
+  );
+  let ratioMin: bigint | null = null;
+
+  for (let i = 0; i < n; i++) {
+    if (actualBalances[i] > 0n && lpBalancesForAdd[i] === 0n) {
+      throw new Error("capDepositAmountsToLpRatio: live token has no LP claim");
+    }
+    if (lpBalancesForAdd[i] === 0n) continue;
+    if (helperBalances[i] <= 0n) {
+      throw new Error("capDepositAmountsToLpRatio: amount too small");
+    }
+    const ratio = (helperBalances[i] * ONE) / lpBalancesForAdd[i];
+    ratioMin = ratioMin === null || ratio < ratioMin ? ratio : ratioMin;
+  }
+
+  if (ratioMin === null || ratioMin === 0n) {
+    throw new Error("capDepositAmountsToLpRatio: amount too small");
+  }
+
+  const depositAmounts = lpBalancesForAdd.map((lp, i) => {
+    if (lp === 0n) return 0n;
+    const amount = (lp * ratioMin!) / ONE;
+    if (amount <= 0n) {
+      throw new Error("capDepositAmountsToLpRatio: amount too small");
+    }
+    return amount > helperBalances[i] ? helperBalances[i] : amount;
+  });
+  const refundAmounts = helperBalances.map((balance, i) =>
+    balance > depositAmounts[i] ? balance - depositAmounts[i] : 0n
+  );
+
+  return { depositAmounts, refundAmounts, lpBalancesForAdd };
+}

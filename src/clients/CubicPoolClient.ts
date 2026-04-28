@@ -17,8 +17,8 @@ import {
   calcSpotOut,
   calcTokensOutGivenBptIn,
 } from "../math/cubicMath";
-import { applySlippage, applySwapFee, lpBalances, priceImpactHbps } from "../math/slippage";
-import { computeAllocations, computeTwoTokenOptimalAllocations } from "../math/singleToken";
+import { applySlippage, applySwapFee, priceImpactHbps } from "../math/slippage";
+import { capDepositAmountsToLpRatio, computeAllocations } from "../math/singleToken";
 import {
   buildAddLiquidityTx,
   buildRemoveLiquidityTx,
@@ -33,13 +33,6 @@ import {
   SwapParams,
 } from "../types/tx";
 import { SingleTokenDepositClient } from "./SingleTokenDepositClient";
-
-const MULTI_TOKEN_PENDING_FEES_SINGLE_DEPOSIT_MESSAGE =
-  "Single-token deposit is unavailable while protocol fees are pending in pools with more than two tokens. Collect protocol fees or use proportional deposit.";
-
-function hasPendingProtocolFees(pool: PoolInfo): boolean {
-  return pool.tokens.some((t) => BigInt(t.protocolFeesOwed.toString()) > 0n);
-}
 
 export interface CubicPoolClientParams {
   config: CubeConfig;
@@ -208,30 +201,28 @@ export class CubicPoolClient {
       const protocolFeeAmount =
         (feeAmount * BigInt(protocolFeeRate)) / BigInt(10_000);
 
-      const { lpActual: _lpActualIn, lpVirtual: lpVirtIn } = lpBalances(
-        BigInt(inTok.actualBalance.toString()),
-        BigInt(inTok.virtualBalance.toString()),
-        BigInt(inTok.protocolFeesOwed.toString())
-      );
-      const { lpActual: lpActualOut, lpVirtual: lpVirtOut } = lpBalances(
-        BigInt(outTok.actualBalance.toString()),
-        BigInt(outTok.virtualBalance.toString()),
-        BigInt(outTok.protocolFeesOwed.toString())
-      );
+      // Mirror cubic-pool's swap.rs: raw virtual balances drive the math,
+      // lp_actual_out caps the output amount. Using lp_virtual here would
+      // diverge from the on-chain quote on pools with pending protocol fees.
+      const virtIn = BigInt(inTok.virtualBalance.toString());
+      const virtOut = BigInt(outTok.virtualBalance.toString());
+      const actualOut = BigInt(outTok.actualBalance.toString());
+      const pfoOut = BigInt(outTok.protocolFeesOwed.toString());
+      const lpActualOut = actualOut > pfoOut ? actualOut - pfoOut : 0n;
 
       const amountOut = calcOutGivenIn({
-        virtualBalanceIn: lpVirtIn,
+        virtualBalanceIn: virtIn,
         weightInBps: BigInt(inTok.weightBps),
-        virtualBalanceOut: lpVirtOut,
+        virtualBalanceOut: virtOut,
         weightOutBps: BigInt(outTok.weightBps),
         amountIn: amountAfterFee,
         actualBalanceOut: lpActualOut,
       });
 
       const spotOut = calcSpotOut({
-        virtualBalanceIn: lpVirtIn,
+        virtualBalanceIn: virtIn,
         weightInBps: BigInt(inTok.weightBps),
-        virtualBalanceOut: lpVirtOut,
+        virtualBalanceOut: virtOut,
         weightOutBps: BigInt(outTok.weightBps),
         amountIn: amountAfterFee,
       });
@@ -281,34 +272,19 @@ export class CubicPoolClient {
       const protocolFeesOwed = pool.tokens.map((t) => BigInt(t.protocolFeesOwed.toString()));
       const weightsBps = pool.tokens.map((t) => t.weightBps);
       const amountInBI = BigInt(amountIn.toString());
-      const hasPendingProtocolFees = protocolFeesOwed.some((fee) => fee > 0n);
-      if (hasPendingProtocolFees && pool.tokens.length !== 2) {
-        return err(
-          "unsupported_pool_state",
-          MULTI_TOKEN_PENDING_FEES_SINGLE_DEPOSIT_MESSAGE
-        );
-      }
-      const alloc = hasPendingProtocolFees
-        ? (() => {
-            const twoTokenInIndex = tokenInIndex as 0 | 1;
-            return computeTwoTokenOptimalAllocations({
-              actualBalances: [actualBalances[0], actualBalances[1]],
-              virtualBalances: [virtualBalances[0], virtualBalances[1]],
-              protocolFeesOwed: [protocolFeesOwed[0], protocolFeesOwed[1]],
-              weightsBps: [weightsBps[0], weightsBps[1]],
-              amountIn: amountInBI,
-              tokenInIndex: twoTokenInIndex,
-              swapFeeRate: pool.swapFeeRate,
-              protocolFeeRate: pool.protocolFeeRate,
-            });
-          })()
-        : computeAllocations({
-            actualBalances,
-            virtualBalances,
-            weightsBps,
-            amountIn: amountInBI,
-            tokenInIndex,
-          });
+      // Mirror the helper contract: weight by LP-accessible balances
+      // (actual - protocolFeesOwed). This avoids the heavy 2-token optimizer
+      // which used to live here but exceeded the program's BPF CU budget.
+      const lpAccessibleBalances = actualBalances.map((actual, i) =>
+        actual > protocolFeesOwed[i] ? actual - protocolFeesOwed[i] : 0n
+      );
+      const alloc = computeAllocations({
+        actualBalances: lpAccessibleBalances,
+        virtualBalances,
+        weightsBps,
+        amountIn: amountInBI,
+        tokenInIndex,
+      });
 
       const expectedOuts: BN[] = [];
       const minOuts: BN[] = [];
@@ -336,25 +312,21 @@ export class CubicPoolClient {
         const feeAmount = swapAmount - amountAfterFee;
         const protocolFeeAmount =
           (feeAmount * BigInt(pool.protocolFeeRate)) / 10_000n;
-        const inLp = lpBalances(
-          simActual[tokenInIndex],
-          simVirtual[tokenInIndex],
-          simProtocolFees[tokenInIndex]
-        );
-        const outLp = lpBalances(
-          simActual[i],
-          simVirtual[i],
-          simProtocolFees[i]
-        );
+        // Match cubic-pool/swap.rs exactly: it uses RAW virtual balances and
+        // takes lp_actual_out only as the output cap. Earlier the SDK used
+        // LP-virtuals here (and the helper did too), causing slippage drift
+        // on pools with pending protocol fees.
+        const lpActualOut =
+          simActual[i] > simProtocolFees[i] ? simActual[i] - simProtocolFees[i] : 0n;
         const out = calcOutGivenIn({
-          virtualBalanceIn: inLp.lpVirtual,
+          virtualBalanceIn: simVirtual[tokenInIndex],
           weightInBps: BigInt(weightsBps[tokenInIndex]),
-          virtualBalanceOut: outLp.lpVirtual,
+          virtualBalanceOut: simVirtual[i],
           weightOutBps: BigInt(weightsBps[i]),
           amountIn: amountAfterFee,
-          actualBalanceOut: outLp.lpActual,
+          actualBalanceOut: lpActualOut,
         });
-        const min = applySlippage(out, slip);
+        const min = applySlippage(out > 0n ? out - 1n : 0n, slip);
         expectedOuts.push(new BN(out.toString()));
         minOuts.push(new BN(min.toString()));
 
@@ -367,12 +339,14 @@ export class CubicPoolClient {
       }
       depositAmounts[tokenInIndex] = remainingInput;
 
-      const lpBalancesForAdd = simActual.map((actual, i) =>
-        actual > simProtocolFees[i] ? actual - simProtocolFees[i] : 0n
-      );
+      const capped = capDepositAmountsToLpRatio({
+        helperBalances: depositAmounts,
+        actualBalances: simActual,
+        protocolFeesOwed: simProtocolFees,
+      });
       const estBpt = calcBptOutGivenExactTokensIn(
-        lpBalancesForAdd,
-        depositAmounts,
+        capped.lpBalancesForAdd,
+        capped.depositAmounts,
         BigInt(pool.bptTotalSupply.toString())
       );
 
@@ -382,6 +356,8 @@ export class CubicPoolClient {
         allocations: alloc.allocations.map((b) => new BN(b.toString())),
         expectedOuts,
         minOuts,
+        depositedAmounts: capped.depositAmounts.map((b) => new BN(b.toString())),
+        refundAmounts: capped.refundAmounts.map((b) => new BN(b.toString())),
         estimatedBpt: new BN(estBpt.toString()),
         sidelinedTokenIndices: sidelined,
       });
@@ -399,11 +375,12 @@ export class CubicPoolClient {
       return err("invalid_input", "Pool has zero BPT supply");
     }
     try {
-      const bals = pool.tokens.map((t) => {
-        const actual = BigInt(t.actualBalance.toString());
-        const fees = BigInt(t.protocolFeesOwed.toString());
-        return actual > fees ? actual - fees : 0n;
-      });
+      // Match cubic-pool/remove_liquidity.rs exactly: it computes
+      // token_amounts as `actual_balances[i] * bpt_amount / bpt_supply`
+      // against the raw stored actual (no protocol-fee subtraction). Use
+      // the same input here so the SDK quote equals what the contract
+      // actually transfers.
+      const bals = pool.tokens.map((t) => BigInt(t.actualBalance.toString()));
       const outs = calcTokensOutGivenBptIn(bals, BigInt(bptIn.toString()), BigInt(pool.bptTotalSupply.toString()));
       return ok({ tokenOuts: outs.map((o) => new BN(o.toString())) });
     } catch (e) {
@@ -476,12 +453,6 @@ export class CubicPoolClient {
     const poolRes = this.requireCache();
     if (!poolRes.ok) return poolRes;
     if (params.amountIn.lten(0)) return err("invalid_input", "amountIn must be > 0");
-    if (hasPendingProtocolFees(poolRes.data) && poolRes.data.tokenCount !== 2) {
-      return err(
-        "unsupported_pool_state",
-        MULTI_TOKEN_PENDING_FEES_SINGLE_DEPOSIT_MESSAGE
-      );
-    }
     try {
       return ok(buildSingleTokenDepositTx(this.config, poolRes.data, params));
     } catch (e) {

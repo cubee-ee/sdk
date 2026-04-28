@@ -64,7 +64,11 @@ export {
   calcSpotOut,
 } from "./math/cubicMath";
 export { validateWeights, calcSpotPrice } from "./math/weightedMath";
-export { computeAllocations, computeTwoTokenOptimalAllocations } from "./math/singleToken";
+export {
+  capDepositAmountsToLpRatio,
+  computeAllocations,
+  computeTwoTokenOptimalAllocations,
+} from "./math/singleToken";
 export { applySlippage, applySwapFee, lpBalances, priceImpactHbps } from "./math/slippage";
 export { RpcClient } from "./clients/RpcClient";
 export { CubeBackendClient } from "./clients/CubeBackendClient";

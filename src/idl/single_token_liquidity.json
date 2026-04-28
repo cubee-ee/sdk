@@ -278,7 +278,7 @@
     {
       "code": 6029,
       "name": "PendingProtocolFeesUnsupported",
-      "msg": "Single-token deposit with pending protocol fees is only supported for two-token pools"
+      "msg": "Single-token deposit cannot safely route the current protocol-fee state"
     }
   ],
   "types": [

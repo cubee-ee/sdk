@@ -44,11 +44,11 @@ const STLD_DISC = {
  * Anchor discriminator: sha256("global:<ix_name>")[0..8]. The SDK
  * pre-computes only the cases it needs.
  *
- * Pre-computed values (confirmed against the generated IDL):
- *   swap                  → f8c3b1a2ba67e3de  (see IDL)
- *   add_liquidity         → b59d604b03b3a81b
- *   remove_liquidity      → 00017cc11717b94e
- *   initialize_cubic_pool → 3c22e44d76d29f21
+ * Pre-computed values (confirmed against `src/idl/*.json`):
+ *   swap                  → f8c69e91e17587c8
+ *   add_liquidity         → b59d59438fb63448
+ *   remove_liquidity      → 5055d14818ceb16c
+ *   initialize_cubic_pool → d79474cf79686f83
  *   deposit_single_token  → a688a62fc7c056a9
  *
  * If you change an instruction name in Rust, regenerate by reading the
@@ -58,12 +58,12 @@ function computeDiscriminator(ixName: string): Buffer {
   // Fallback: Anchor exposes discriminators in the IDL. We ship the known
   // ones as a static map; callers passing unknown names error clearly.
   const KNOWN: Record<string, string> = {
-    swap: "f8c3b1a2ba67e3de",
-    add_liquidity: "b59d604b03b3a81b",
-    remove_liquidity: "00017cc11717b94e",
-    initialize_cubic_pool: "3c22e44d76d29f21",
+    swap: "f8c69e91e17587c8",
+    add_liquidity: "b59d59438fb63448",
+    remove_liquidity: "5055d14818ceb16c",
+    initialize_cubic_pool: "d79474cf79686f83",
     deposit_single_token: "a688a62fc7c056a9",
-    initialize_config: "d08a39a35b7ebf19",
+    initialize_config: "d07f1501c2bec446",
   };
   const hex = KNOWN[ixName];
   if (!hex) throw new Error(`tx-builders: unknown discriminator for "${ixName}"`);
@@ -261,12 +261,31 @@ export function buildRemoveLiquidityTx(
   pool: PoolInfo,
   params: RemoveLiquidityParams
 ): BuiltTx {
+  const ixs: TransactionInstruction[] = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: cfg.defaults.cuLimit }),
+  ];
+
+  // The contract transfers every pool token to the user's ATA. Include
+  // idempotent creates so a proportional burn works even when the user never
+  // held one of the receive tokens before.
+  for (const t of pool.tokens) {
+    const userAta = deriveAta(params.user, t.mint, t.tokenProgram);
+    ixs.push(
+      createAssociatedTokenAccountIdempotentInstruction(
+        params.user,
+        userAta,
+        params.user,
+        t.mint,
+        t.tokenProgram
+      )
+    );
+  }
+
+  ixs.push(buildRemoveLiquidityIx(cfg, pool, params));
+
   return {
-    instructions: [
-      ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }),
-      buildRemoveLiquidityIx(cfg, pool, params),
-    ],
-    suggestedCuLimit: 600_000,
+    instructions: ixs,
+    suggestedCuLimit: cfg.defaults.cuLimit,
   };
 }
 

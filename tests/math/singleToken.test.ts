@@ -1,6 +1,10 @@
 import { calcBptOutGivenExactTokensIn, calcOutGivenIn } from "../../src/math/cubicMath";
 import { ONE } from "../../src/math/fixedPoint";
-import { computeAllocations, computeTwoTokenOptimalAllocations } from "../../src/math/singleToken";
+import {
+  capDepositAmountsToLpRatio,
+  computeAllocations,
+  computeTwoTokenOptimalAllocations,
+} from "../../src/math/singleToken";
 import { lpBalances } from "../../src/math/slippage";
 
 function simulateSingleTokenPath(params: {
@@ -204,5 +208,27 @@ describe("computeAllocations", () => {
 
     expect(optimized).toEqual([77n, 23n]);
     expect(optimizedPath.bptOut).toBe(2296n);
+  });
+
+  test("caps imbalanced helper balances to LP-accessible proportional ratio", () => {
+    const capped = capDepositAmountsToLpRatio({
+      helperBalances: [100n, 900n, 700n],
+      actualBalances: [1_000n, 2_000n, 3_000n],
+      protocolFeesOwed: [500n, 200n, 0n],
+    });
+
+    expect(capped.lpBalancesForAdd).toEqual([500n, 1800n, 3000n]);
+    expect(capped.depositAmounts).toEqual([100n, 360n, 600n]);
+    expect(capped.refundAmounts).toEqual([0n, 540n, 100n]);
+  });
+
+  test("rejects live slots whose full actual balance is protocol fees", () => {
+    expect(() =>
+      capDepositAmountsToLpRatio({
+        helperBalances: [1n, 1n],
+        actualBalances: [100n, 100n],
+        protocolFeesOwed: [100n, 0n],
+      })
+    ).toThrow(/no LP claim/);
   });
 });
