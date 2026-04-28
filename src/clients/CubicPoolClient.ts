@@ -34,6 +34,13 @@ import {
 } from "../types/tx";
 import { SingleTokenDepositClient } from "./SingleTokenDepositClient";
 
+const MULTI_TOKEN_PENDING_FEES_SINGLE_DEPOSIT_MESSAGE =
+  "Single-token deposit is unavailable while protocol fees are pending in pools with more than two tokens. Collect protocol fees or use proportional deposit.";
+
+function hasPendingProtocolFees(pool: PoolInfo): boolean {
+  return pool.tokens.some((t) => BigInt(t.protocolFeesOwed.toString()) > 0n);
+}
+
 export interface CubicPoolClientParams {
   config: CubeConfig;
   poolAddress: PublicKey;
@@ -275,18 +282,22 @@ export class CubicPoolClient {
       const weightsBps = pool.tokens.map((t) => t.weightBps);
       const amountInBI = BigInt(amountIn.toString());
       const hasPendingProtocolFees = protocolFeesOwed.some((fee) => fee > 0n);
+      if (hasPendingProtocolFees && pool.tokens.length !== 2) {
+        return err(
+          "unsupported_pool_state",
+          MULTI_TOKEN_PENDING_FEES_SINGLE_DEPOSIT_MESSAGE
+        );
+      }
       const alloc = hasPendingProtocolFees
         ? (() => {
-            if (pool.tokens.length !== 2 || (tokenInIndex !== 0 && tokenInIndex !== 1)) {
-              throw new Error("single-token deposits with pending protocol fees require a 2-token pool");
-            }
+            const twoTokenInIndex = tokenInIndex as 0 | 1;
             return computeTwoTokenOptimalAllocations({
               actualBalances: [actualBalances[0], actualBalances[1]],
               virtualBalances: [virtualBalances[0], virtualBalances[1]],
               protocolFeesOwed: [protocolFeesOwed[0], protocolFeesOwed[1]],
               weightsBps: [weightsBps[0], weightsBps[1]],
               amountIn: amountInBI,
-              tokenInIndex,
+              tokenInIndex: twoTokenInIndex,
               swapFeeRate: pool.swapFeeRate,
               protocolFeeRate: pool.protocolFeeRate,
             });
@@ -465,6 +476,12 @@ export class CubicPoolClient {
     const poolRes = this.requireCache();
     if (!poolRes.ok) return poolRes;
     if (params.amountIn.lten(0)) return err("invalid_input", "amountIn must be > 0");
+    if (hasPendingProtocolFees(poolRes.data) && poolRes.data.tokenCount !== 2) {
+      return err(
+        "unsupported_pool_state",
+        MULTI_TOKEN_PENDING_FEES_SINGLE_DEPOSIT_MESSAGE
+      );
+    }
     try {
       return ok(buildSingleTokenDepositTx(this.config, poolRes.data, params));
     } catch (e) {

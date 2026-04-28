@@ -28,6 +28,7 @@ export type SdkErrorCode =
   | "insufficient_funds"
   | "pool_disabled"
   | "swaps_disabled"
+  | "unsupported_pool_state"
   | "slippage_exceeded"
   | "simulation_failed"
   | "tx_build_failed"
