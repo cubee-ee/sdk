@@ -75,6 +75,7 @@ export { CubeBackendClient } from "./clients/CubeBackendClient";
 export { CubicPoolClient } from "./clients/CubicPoolClient";
 export { SingleTokenDepositClient } from "./clients/SingleTokenDepositClient";
 export { PoolFactoryClient } from "./clients/PoolFactoryClient";
+export { AdminClient } from "./clients/AdminClient";
 export {
   buildSwapIx,
   buildSwapTx,
