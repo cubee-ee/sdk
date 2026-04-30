@@ -167,6 +167,56 @@
       "args": []
     },
     {
+      "name": "pool_debug_withdraw_liquidity",
+      "docs": [
+        "Emergency drain of pool vaults via cubic_pool::debug_withdraw_liquidity.",
+        "",
+        "Treasury PDA signs as the pool's `collect_protocol_fees_authority`.",
+        "Pool must already be disabled (`pool_enabled = false`) — the cubic_pool",
+        "handler enforces this. `token_amounts.len()` must equal the pool's",
+        "token_count. Use `0` to skip a token.",
+        "",
+        "remaining_accounts: [vault_0, recipient_0, tp_0, vault_1, recipient_1, tp_1, ...]"
+      ],
+      "discriminator": [
+        233,
+        72,
+        237,
+        112,
+        183,
+        177,
+        216,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_amounts",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "pool_initialize_config",
       "docs": [
         "Initialize a CubicPoolConfig with Treasury PDA as both authorities.",
@@ -683,6 +733,19 @@
       ]
     },
     {
+      "name": "PoolDebugWithdrawn",
+      "discriminator": [
+        248,
+        239,
+        66,
+        141,
+        207,
+        160,
+        148,
+        123
+      ]
+    },
+    {
       "name": "PoolEnabledSet",
       "discriminator": [
         176,
@@ -972,6 +1035,26 @@
           {
             "name": "default_protocol_fee_rate",
             "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolDebugWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
           },
           {
             "name": "timestamp",

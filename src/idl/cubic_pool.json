@@ -112,6 +112,61 @@
       "args": []
     },
     {
+      "name": "debug_withdraw_liquidity",
+      "docs": [
+        "Emergency-recovery withdraw without burning LP tokens.",
+        "",
+        "Always compiled into production builds — the admin-panel relies on",
+        "this entrypoint for emergency drain. Originally gated behind the",
+        "`debug-withdraw` cargo feature (audit FIX C-06); the gate was removed",
+        "so the recovery path is guaranteed present in every deploy.",
+        "",
+        "### Authority",
+        "- `collect_protocol_fees_authority` only.",
+        "",
+        "### Prerequisites",
+        "- Pool MUST be disabled (`pool_enabled = false`) before calling —",
+        "enforced inside the handler via `PoolMustBeDisabled`.",
+        "",
+        "### Parameters",
+        "- `token_amounts` — per-token withdraw amounts (use `0` to skip)."
+      ],
+      "discriminator": [
+        139,
+        40,
+        126,
+        103,
+        199,
+        34,
+        143,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "config"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Only collect_protocol_fees_authority (= Treasury PDA) can call this."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "token_amounts",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "get_pool_info",
       "docs": [
         "Get all pool data (read-only view function)",
@@ -383,7 +438,7 @@
         {
           "name": "authority",
           "docs": [
-            "Only collect_protocol_fees_authority (protocol admin) can update banned extensions"
+            "Only collect_protocol_fees_authority (= Treasury PDA) can update banned extensions."
           ],
           "signer": true
         }
@@ -429,7 +484,7 @@
         {
           "name": "authority",
           "docs": [
-            "Only collect_protocol_fees_authority can enable/disable the pool"
+            "Only collect_protocol_fees_authority (= Treasury PDA) can enable/disable the pool."
           ],
           "signer": true
         }
@@ -473,7 +528,7 @@
         {
           "name": "authority",
           "docs": [
-            "Only collect_protocol_fees_authority can change protocol fee rate"
+            "Only collect_protocol_fees_authority (= Treasury PDA) can change protocol fee rate."
           ],
           "signer": true
         }
