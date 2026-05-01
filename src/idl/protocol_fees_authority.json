@@ -1,5 +1,5 @@
 {
-  "address": "8Q3K6jZEJSaXGL1VS1w7bmqNVzDTmw68jaWi5mmU9LD5",
+  "address": "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81",
   "metadata": {
     "name": "protocol_fees_authority",
     "version": "0.3.0",
@@ -57,6 +57,49 @@
         {
           "name": "admin",
           "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_pool_program",
+      "docs": [
+        "Close a Solana program. Treasury PDA must be the upgrade authority.",
+        "Refunds the rent of the programdata account to `recipient`. The",
+        "program becomes uncallable forever after this — handle with care."
+      ],
+      "discriminator": [
+        14,
+        61,
+        137,
+        221,
+        169,
+        57,
+        182,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "programdata",
+          "writable": true
+        },
+        {
+          "name": "program_to_close",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "bpf_loader_upgradeable"
         }
       ],
       "args": []
@@ -469,6 +512,50 @@
       ]
     },
     {
+      "name": "pool_withdraw_sol",
+      "docs": [
+        "Withdraw lamports from any cubic_pool-owned account (Pool, Config) via",
+        "CPI. Treasury PDA signs as the authority. Drains down to (not below)",
+        "rent-exempt minimum on the source account."
+      ],
+      "discriminator": [
+        29,
+        48,
+        78,
+        101,
+        133,
+        179,
+        78,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "register_token",
       "docs": [
         "Register a token with the treasury (creates a PDA-owned vault)"
@@ -510,6 +597,49 @@
       "args": []
     },
     {
+      "name": "stld_withdraw_sol",
+      "docs": [
+        "Withdraw lamports from any single_token_liquidity-owned account via CPI.",
+        "Mirror of `pool_withdraw_sol`, but targets the stld program."
+      ],
+      "discriminator": [
+        200,
+        145,
+        33,
+        30,
+        126,
+        106,
+        214,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "stld_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "transfer_upgrade_authority",
       "docs": [
         "Transfer program upgrade authority. Treasury PDA must be current authority."
@@ -538,6 +668,9 @@
         },
         {
           "name": "new_authority_info"
+        },
+        {
+          "name": "bpf_loader_upgradeable"
         }
       ],
       "args": [
@@ -591,6 +724,9 @@
         },
         {
           "name": "clock"
+        },
+        {
+          "name": "bpf_loader_upgradeable"
         }
       ],
       "args": []
@@ -628,6 +764,47 @@
         },
         {
           "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_sol",
+      "docs": [
+        "Withdraw lamports from the Treasury PDA itself, down to (not below)",
+        "rent-exempt minimum. Admin signs.",
+        "",
+        "Use this to recover SOL accidentally sent to the Treasury PDA, or any",
+        "SOL that accumulated above the rent floor. Cannot drain Treasury below",
+        "rent-exempt — that would risk the PDA being garbage-collected."
+      ],
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
         }
       ],
       "args": [
@@ -785,6 +962,19 @@
       ]
     },
     {
+      "name": "PoolSolWithdrawnViaTreasury",
+      "discriminator": [
+        175,
+        97,
+        232,
+        103,
+        247,
+        51,
+        113,
+        155
+      ]
+    },
+    {
       "name": "PoolSwapFeeRateSet",
       "discriminator": [
         126,
@@ -811,6 +1001,19 @@
       ]
     },
     {
+      "name": "ProgramClosed",
+      "discriminator": [
+        3,
+        105,
+        195,
+        187,
+        122,
+        1,
+        142,
+        8
+      ]
+    },
+    {
       "name": "ProgramUpgraded",
       "discriminator": [
         116,
@@ -821,6 +1024,32 @@
         250,
         209,
         13
+      ]
+    },
+    {
+      "name": "SolWithdrawn",
+      "discriminator": [
+        145,
+        249,
+        69,
+        48,
+        206,
+        86,
+        91,
+        66
+      ]
+    },
+    {
+      "name": "StldSolWithdrawnViaTreasury",
+      "discriminator": [
+        247,
+        191,
+        127,
+        71,
+        114,
+        147,
+        79,
+        80
       ]
     },
     {
@@ -888,6 +1117,21 @@
       "code": 6004,
       "name": "NoPendingAdmin",
       "msg": "No pending admin transfer"
+    },
+    {
+      "code": 6005,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6006,
+      "name": "WouldBreakRentExempt",
+      "msg": "Withdrawal would break rent exemption"
+    },
+    {
+      "code": 6007,
+      "name": "MathError",
+      "msg": "Math error"
     }
   ],
   "types": [
@@ -1132,6 +1376,38 @@
       }
     },
     {
+      "name": "PoolSolWithdrawnViaTreasury",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "PoolSwapFeeRateSet",
       "type": {
         "kind": "struct",
@@ -1180,6 +1456,30 @@
       }
     },
     {
+      "name": "ProgramClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "ProgramUpgraded",
       "type": {
         "kind": "struct",
@@ -1191,6 +1491,66 @@
           {
             "name": "program",
             "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SolWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StldSolWithdrawnViaTreasury",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
           },
           {
             "name": "timestamp",

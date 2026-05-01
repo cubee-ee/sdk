@@ -1,5 +1,5 @@
 {
-  "address": "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u",
+  "address": "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2",
   "metadata": {
     "name": "single_token_liquidity",
     "version": "0.1.0",
@@ -84,6 +84,44 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "withdraw_sol",
+      "docs": [
+        "Withdraw lamports from a stld-owned account down to (not below)",
+        "rent-exempt minimum. Authority MUST be Treasury PDA — in practice",
+        "invoked via CPI from `protocol_fees_authority::stld_withdraw_sol`."
+      ],
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -126,6 +164,19 @@
         39,
         164,
         235
+      ]
+    },
+    {
+      "name": "StldSolWithdrawn",
+      "discriminator": [
+        24,
+        246,
+        27,
+        39,
+        222,
+        196,
+        135,
+        61
       ]
     }
   ],
@@ -279,6 +330,21 @@
       "code": 6029,
       "name": "PendingProtocolFeesUnsupported",
       "msg": "Single-token deposit cannot safely route the current protocol-fee state"
+    },
+    {
+      "code": 6030,
+      "name": "Unauthorized",
+      "msg": "Unauthorized"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidSourceOwner",
+      "msg": "Source account must be owned by this program"
+    },
+    {
+      "code": 6032,
+      "name": "WouldBreakRentExempt",
+      "msg": "Withdrawal would break rent exemption"
     }
   ],
   "types": [
@@ -520,6 +586,34 @@
           },
           {
             "name": "dust_refunded",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StldSolWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
             "type": "u64"
           },
           {

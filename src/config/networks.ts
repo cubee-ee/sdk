@@ -10,34 +10,34 @@ export interface NetworkPrograms {
 
 export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
   mainnet: {
-    cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    cubicPool: new PublicKey("8iQtGj9mcUfFUGaiCpPy89swC3s8YTC8FhVZWfgeZhwu"),
     // TODO(mainnet): single_token_liquidity is NOT deployed on mainnet — this
     // is the devnet program ID as a placeholder. Single-token deposit is
     // disabled in the frontend. If/when stld ships on mainnet, replace this
     // with the real mainnet program ID.
     singleTokenLiquidity: new PublicKey(
-      "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
+      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
     ),
     protocolFeesAuthority: new PublicKey(
-      "8Q3K6jZEJSaXGL1VS1w7bmqNVzDTmw68jaWi5mmU9LD5"
+      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
     ),
   },
   devnet: {
-    cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    cubicPool: new PublicKey("8iQtGj9mcUfFUGaiCpPy89swC3s8YTC8FhVZWfgeZhwu"),
     singleTokenLiquidity: new PublicKey(
-      "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
+      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
     ),
     protocolFeesAuthority: new PublicKey(
-      "8Q3K6jZEJSaXGL1VS1w7bmqNVzDTmw68jaWi5mmU9LD5"
+      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
     ),
   },
   localnet: {
-    cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    cubicPool: new PublicKey("8iQtGj9mcUfFUGaiCpPy89swC3s8YTC8FhVZWfgeZhwu"),
     singleTokenLiquidity: new PublicKey(
-      "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
+      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
     ),
     protocolFeesAuthority: new PublicKey(
-      "8Q3K6jZEJSaXGL1VS1w7bmqNVzDTmw68jaWi5mmU9LD5"
+      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
     ),
   },
 };
