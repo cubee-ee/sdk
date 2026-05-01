@@ -10,8 +10,11 @@ export interface NetworkPrograms {
 
 export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
   mainnet: {
-    // TODO: fill in on launch
     cubicPool: new PublicKey("Fc3RtYQey4mngcs3bkC6qyC5Zav3mVmxV7tqvwThwwq7"),
+    // TODO(mainnet): single_token_liquidity is NOT deployed on mainnet — this
+    // is the devnet program ID as a placeholder. Single-token deposit is
+    // disabled in the frontend. If/when stld ships on mainnet, replace this
+    // with the real mainnet program ID.
     singleTokenLiquidity: new PublicKey(
       "66wPN8onWHnJV5tYXxcNX1rMkBBePAmgCRp3c5xHXJ3u"
     ),
