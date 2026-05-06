@@ -419,12 +419,12 @@ export function buildSingleTokenDepositTx(
 
 export function buildInitializeConfigIx(
   cfg: CubeConfig,
-  params: { config: PublicKey; payer: PublicKey; feeAuthority: PublicKey; collectProtocolFeesAuthority: PublicKey; defaultProtocolFeeRate: number }
+  params: { config: PublicKey; payer: PublicKey; poolAdmin: PublicKey; protocolAdmin: PublicKey; defaultProtocolFeeRate: number }
 ): TransactionInstruction {
   const data = Buffer.concat([
     computeDiscriminator("initialize_config"),
-    params.feeAuthority.toBuffer(),
-    params.collectProtocolFeesAuthority.toBuffer(),
+    params.poolAdmin.toBuffer(),
+    params.protocolAdmin.toBuffer(),
     encodeU16(params.defaultProtocolFeeRate),
   ]);
   const keys: AccountMeta[] = [

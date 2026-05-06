@@ -10,7 +10,13 @@
     {
       "name": "accept_admin_transfer",
       "docs": [
-        "Accept admin transfer (pending admin must call)"
+        "Step 2 of admin transfer — pending admin signs to accept.",
+        "",
+        "# Errors",
+        "`NotPendingAdmin`, `NoPendingAdmin`.",
+        "",
+        "# Events",
+        "`AdminTransferred`."
       ],
       "discriminator": [
         89,
@@ -37,7 +43,10 @@
     {
       "name": "cancel_admin_transfer",
       "docs": [
-        "Cancel pending admin transfer"
+        "Cancel a pending admin transfer (current admin signs).",
+        "",
+        "# Events",
+        "`AdminTransferCancelled`."
       ],
       "discriminator": [
         38,
@@ -64,9 +73,13 @@
     {
       "name": "close_pool_program",
       "docs": [
-        "Close a Solana program. Treasury PDA must be the upgrade authority.",
-        "Refunds the rent of the programdata account to `recipient`. The",
-        "program becomes uncallable forever after this — handle with care."
+        "Permanently close a deployed program (Treasury PDA must be the",
+        "upgrade authority). Refunds the programdata account's rent to",
+        "`recipient`. Irreversible — the program ID becomes uncallable",
+        "forever after this. Handle with extreme care.",
+        "",
+        "# Events",
+        "`ProgramClosed`."
       ],
       "discriminator": [
         14,
@@ -107,7 +120,17 @@
     {
       "name": "initialize",
       "docs": [
-        "Initialize the treasury with an admin"
+        "Create the Treasury PDA. Singleton — can only be called once",
+        "(PDA seed is `[b\"treasury\"]`).",
+        "",
+        "# Parameters",
+        "* `admin` — initial human admin pubkey.",
+        "",
+        "# Events",
+        "`TreasuryInitialized`.",
+        "",
+        "# Used by",
+        "One-time deploy script (`scripts/initialize-treasury.ts`)."
       ],
       "discriminator": [
         175,
@@ -143,7 +166,14 @@
     {
       "name": "initiate_admin_transfer",
       "docs": [
-        "Initiate admin transfer (2-step process)"
+        "Step 1 of admin transfer — current admin nominates a successor.",
+        "",
+        "# Parameters",
+        "* `new_admin` — successor pubkey. Pass `Pubkey::default()` to",
+        "clear pending state instead (or use `cancel_admin_transfer`).",
+        "",
+        "# Events",
+        "`AdminTransferInitiated`."
       ],
       "discriminator": [
         232,
@@ -175,8 +205,15 @@
     {
       "name": "pool_collect_protocol_fees",
       "docs": [
-        "Collect protocol fees from a Cubic Pool via CPI.",
-        "remaining_accounts: [vault_0, recipient_0, tp_0, vault_1, recipient_1, tp_1, ...]"
+        "CPI wrapper: collect a pool's `protocol_fees_owed`.",
+        "",
+        "# remaining_accounts",
+        "Forwarded as-is to `cubic_pool::collect_protocol_fees`:",
+        "`[vault_i, recipient_i, token_program_i]` per token.",
+        "",
+        "# Events",
+        "`PoolFeesCollected` (this program), `ProtocolFeesCollected`",
+        "(cubic-pool)."
       ],
       "discriminator": [
         132,
@@ -212,14 +249,22 @@
     {
       "name": "pool_debug_withdraw_liquidity",
       "docs": [
-        "Emergency drain of pool vaults via cubic_pool::debug_withdraw_liquidity.",
+        "CPI wrapper: emergency drain via `debug_withdraw_liquidity`.",
+        "Pool MUST already be disabled (`pool_enabled = false`); the",
+        "cubic-pool handler enforces this.",
         "",
-        "Treasury PDA signs as the pool's `collect_protocol_fees_authority`.",
-        "Pool must already be disabled (`pool_enabled = false`) — the cubic_pool",
-        "handler enforces this. `token_amounts.len()` must equal the pool's",
-        "token_count. Use `0` to skip a token.",
+        "**The pool becomes BRICKED after this runs** — see",
+        "`cubic_pool::debug_withdraw_liquidity` doc.",
         "",
-        "remaining_accounts: [vault_0, recipient_0, tp_0, vault_1, recipient_1, tp_1, ...]"
+        "# Parameters",
+        "* `token_amounts` — per-token withdraw amounts (use 0 to skip).",
+        "",
+        "# remaining_accounts",
+        "Forwarded as-is to `cubic_pool::debug_withdraw_liquidity`:",
+        "`[vault_i, recipient_i, token_program_i]` per token.",
+        "",
+        "# Events",
+        "`PoolDebugWithdrawn`, `DebugLiquidityWithdrawn` (cubic-pool)."
       ],
       "discriminator": [
         233,
@@ -262,8 +307,20 @@
     {
       "name": "pool_initialize_config",
       "docs": [
-        "Initialize a CubicPoolConfig with Treasury PDA as both authorities.",
-        "Admin pays for account creation."
+        "Create a new `CubicPoolConfig` with both admin pubkeys wired to",
+        "the Treasury PDA.",
+        "",
+        "Why this wrapper: cubic-pool's `initialize_config` accepts any",
+        "admin pubkeys (otherwise dev/test setup would be impossible),",
+        "but production callers MUST go through here so they get the",
+        "canonical Treasury-routed governance.",
+        "",
+        "# Parameters",
+        "* `default_protocol_fee_rate` — basis points,",
+        "≤ `MAX_PROTOCOL_FEE_RATE`.",
+        "",
+        "# Events",
+        "`PoolConfigInitialized`."
       ],
       "discriminator": [
         208,
@@ -277,10 +334,7 @@
       ],
       "accounts": [
         {
-          "name": "treasury",
-          "docs": [
-            "Treasury PDA — becomes both fee_authority and collect_protocol_fees_authority"
-          ]
+          "name": "treasury"
         },
         {
           "name": "admin",
@@ -290,7 +344,8 @@
         {
           "name": "config",
           "docs": [
-            "Config keypair — must sign the outer transaction for account creation"
+            "Config keypair — must sign the outer transaction so cubic-pool",
+            "can `init` the new account."
           ],
           "writable": true,
           "signer": true
@@ -312,7 +367,8 @@
     {
       "name": "pool_set_banned_extensions",
       "docs": [
-        "Set banned Token-2022 extensions on a CubicPoolConfig via CPI"
+        "CPI wrapper: update Token-2022 banned-extensions bitmap on a",
+        "config (`cubic_pool::set_banned_extensions`)."
       ],
       "discriminator": [
         192,
@@ -350,7 +406,8 @@
     {
       "name": "pool_set_pool_enabled",
       "docs": [
-        "Enable or disable a Cubic Pool via CPI"
+        "CPI wrapper: master pool kill-switch",
+        "(`cubic_pool::set_pool_enabled`)."
       ],
       "discriminator": [
         46,
@@ -391,7 +448,7 @@
     {
       "name": "pool_set_protocol_fee_rate",
       "docs": [
-        "Set protocol fee rate on a Cubic Pool via CPI"
+        "CPI wrapper: set `pool.protocol_fee_rate`."
       ],
       "discriminator": [
         133,
@@ -432,7 +489,10 @@
     {
       "name": "pool_set_swap_fee_rate",
       "docs": [
-        "Set swap fee rate on a Cubic Pool via CPI"
+        "CPI wrapper: set `pool.swap_fee_rate`.",
+        "",
+        "# Events",
+        "`PoolSwapFeeRateSet`, `SwapFeeRateUpdated` (cubic-pool)."
       ],
       "discriminator": [
         81,
@@ -473,7 +533,8 @@
     {
       "name": "pool_set_swaps_enabled",
       "docs": [
-        "Enable or disable swaps on a Cubic Pool via CPI"
+        "CPI wrapper: per-pool swap toggle",
+        "(`cubic_pool::set_swaps_enabled`)."
       ],
       "discriminator": [
         43,
@@ -514,9 +575,12 @@
     {
       "name": "pool_withdraw_sol",
       "docs": [
-        "Withdraw lamports from any cubic_pool-owned account (Pool, Config) via",
-        "CPI. Treasury PDA signs as the authority. Drains down to (not below)",
-        "rent-exempt minimum on the source account."
+        "CPI wrapper: drain SOL from any cubic-pool-owned account",
+        "(Pool, Config, …). Treasury PDA signs.",
+        "",
+        "# Events",
+        "`PoolSolWithdrawnViaTreasury` (this program), `PoolSolWithdrawn`",
+        "(cubic-pool program)."
       ],
       "discriminator": [
         29,
@@ -558,7 +622,17 @@
     {
       "name": "register_token",
       "docs": [
-        "Register a token with the treasury (creates a PDA-owned vault)"
+        "Register a token with the treasury and create its vault PDA. The",
+        "admin pays for the vault.",
+        "",
+        "# Errors",
+        "`MaxTokensReached`, `Unauthorized` (signer ≠ treasury.admin).",
+        "",
+        "# Events",
+        "`TokenRegistered`.",
+        "",
+        "# Used by",
+        "`admin-panel/01-register-token.ts`."
       ],
       "discriminator": [
         32,
@@ -599,8 +673,12 @@
     {
       "name": "stld_withdraw_sol",
       "docs": [
-        "Withdraw lamports from any single_token_liquidity-owned account via CPI.",
-        "Mirror of `pool_withdraw_sol`, but targets the stld program."
+        "CPI wrapper: drain SOL from a stld-owned account. Treasury PDA",
+        "signs as the authority required by `single_token_liquidity::withdraw_sol`.",
+        "",
+        "# Events",
+        "`StldSolWithdrawnViaTreasury` (this program), `StldSolWithdrawn`",
+        "(stld program)."
       ],
       "discriminator": [
         200,
@@ -642,7 +720,13 @@
     {
       "name": "transfer_upgrade_authority",
       "docs": [
-        "Transfer program upgrade authority. Treasury PDA must be current authority."
+        "Transfer upgrade authority away from the Treasury PDA. After",
+        "this, the new authority controls the program — typically used",
+        "to make a program permanently immutable when the protocol decides",
+        "to lock in.",
+        "",
+        "# Events",
+        "`UpgradeAuthorityTransferred`."
       ],
       "discriminator": [
         82,
@@ -683,7 +767,13 @@
     {
       "name": "upgrade_pool_program",
       "docs": [
-        "Upgrade a Solana program. Treasury PDA must be the upgrade authority."
+        "Upgrade an arbitrary on-chain program via the BPF Loader. The",
+        "Treasury PDA must hold the program's upgrade authority — set",
+        "that up at deploy time, or rotate later via",
+        "`transfer_upgrade_authority`.",
+        "",
+        "# Events",
+        "`ProgramUpgraded`."
       ],
       "discriminator": [
         38,
@@ -734,7 +824,17 @@
     {
       "name": "withdraw",
       "docs": [
-        "Withdraw tokens from treasury to any recipient"
+        "Withdraw `amount` tokens from a treasury vault to any recipient.",
+        "Treasury PDA signs with `[b\"treasury\", bump]` seeds.",
+        "",
+        "# Parameters",
+        "* `amount` — raw token units.",
+        "",
+        "# Events",
+        "`FundsWithdrawn`.",
+        "",
+        "# Used by",
+        "`admin-panel/12-withdraw-from-treasury.ts`."
       ],
       "discriminator": [
         183,
@@ -776,12 +876,19 @@
     {
       "name": "withdraw_sol",
       "docs": [
-        "Withdraw lamports from the Treasury PDA itself, down to (not below)",
-        "rent-exempt minimum. Admin signs.",
+        "Drain SOL from the Treasury PDA itself, leaving rent-exempt",
+        "minimum.",
         "",
-        "Use this to recover SOL accidentally sent to the Treasury PDA, or any",
-        "SOL that accumulated above the rent floor. Cannot drain Treasury below",
-        "rent-exempt — that would risk the PDA being garbage-collected."
+        "Use case: recover SOL accidentally sent to the Treasury PDA, or",
+        "excess lamports above the rent floor. Cannot drain Treasury below",
+        "rent-exempt — that would risk the PDA being garbage-collected.",
+        "",
+        "# Parameters",
+        "* `amount` — lamports; > 0 and ≤ `treasury.lamports() -",
+        "rent_exempt_minimum`.",
+        "",
+        "# Events",
+        "`SolWithdrawn`."
       ],
       "discriminator": [
         145,
@@ -1137,6 +1244,9 @@
   "types": [
     {
       "name": "AdminTransferCancelled",
+      "docs": [
+        "Emitted by `cancel_admin_transfer`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1161,6 +1271,9 @@
     },
     {
       "name": "AdminTransferInitiated",
+      "docs": [
+        "Emitted by `initiate_admin_transfer` (step 1 of 2)."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1185,6 +1298,9 @@
     },
     {
       "name": "AdminTransferred",
+      "docs": [
+        "Emitted by `accept_admin_transfer` (step 2 of 2)."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1209,6 +1325,9 @@
     },
     {
       "name": "FundsWithdrawn",
+      "docs": [
+        "Emitted by `withdraw` when tokens leave a treasury vault."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1241,6 +1360,9 @@
     },
     {
       "name": "PoolBannedExtensionsSet",
+      "docs": [
+        "Emitted by `pool_set_banned_extensions`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1265,6 +1387,9 @@
     },
     {
       "name": "PoolConfigInitialized",
+      "docs": [
+        "Emitted by `pool_initialize_config` after the CPI succeeds."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1289,6 +1414,9 @@
     },
     {
       "name": "PoolDebugWithdrawn",
+      "docs": [
+        "Emitted by `pool_debug_withdraw_liquidity`. Pool is BRICKED after this."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1309,6 +1437,9 @@
     },
     {
       "name": "PoolEnabledSet",
+      "docs": [
+        "Emitted by `pool_set_pool_enabled`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1333,6 +1464,9 @@
     },
     {
       "name": "PoolFeesCollected",
+      "docs": [
+        "Emitted by `pool_collect_protocol_fees`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1353,6 +1487,9 @@
     },
     {
       "name": "PoolProtocolFeeRateSet",
+      "docs": [
+        "Emitted by `pool_set_protocol_fee_rate`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1377,6 +1514,10 @@
     },
     {
       "name": "PoolSolWithdrawnViaTreasury",
+      "docs": [
+        "Emitted by `pool_withdraw_sol` (this program); the inner cubic-pool",
+        "program also emits `PoolSolWithdrawn`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1409,6 +1550,9 @@
     },
     {
       "name": "PoolSwapFeeRateSet",
+      "docs": [
+        "Emitted by `pool_set_swap_fee_rate`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1433,6 +1577,9 @@
     },
     {
       "name": "PoolSwapsEnabledSet",
+      "docs": [
+        "Emitted by `pool_set_swaps_enabled`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1457,6 +1604,9 @@
     },
     {
       "name": "ProgramClosed",
+      "docs": [
+        "Emitted by `close_pool_program`. Program ID is dead after this."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1481,6 +1631,9 @@
     },
     {
       "name": "ProgramUpgraded",
+      "docs": [
+        "Emitted by `upgrade_pool_program`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1501,6 +1654,9 @@
     },
     {
       "name": "SolWithdrawn",
+      "docs": [
+        "Emitted by `withdraw_sol` (Treasury PDA → recipient)."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1529,6 +1685,10 @@
     },
     {
       "name": "StldSolWithdrawnViaTreasury",
+      "docs": [
+        "Emitted by `stld_withdraw_sol` (this program); the inner stld",
+        "program also emits `StldSolWithdrawn`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1561,6 +1721,9 @@
     },
     {
       "name": "TokenRegistered",
+      "docs": [
+        "Emitted by `register_token` when a vault PDA is created."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1590,7 +1753,9 @@
     {
       "name": "Treasury",
       "docs": [
-        "Treasury configuration account (PDA: `[b\"treasury\"]`)"
+        "Singleton governance account at PDA `[b\"treasury\"]`. Holds the human",
+        "admin pubkey, a list of registered token mints + vault addresses, and",
+        "pending-admin state for the 2-step transfer flow."
       ],
       "type": {
         "kind": "struct",
@@ -1598,35 +1763,36 @@
           {
             "name": "admin",
             "docs": [
-              "The admin who controls all operations"
+              "Pubkey allowed to call every admin wrapper below."
             ],
             "type": "pubkey"
           },
           {
             "name": "pending_admin",
             "docs": [
-              "Pending admin for 2-step transfer (zero if none pending)"
+              "Pending admin during a 2-step transfer; `Pubkey::default()` when",
+              "no transfer is in flight."
             ],
             "type": "pubkey"
           },
           {
             "name": "bump",
             "docs": [
-              "Treasury PDA bump seed"
+              "Bump seed for the treasury PDA."
             ],
             "type": "u8"
           },
           {
             "name": "token_count",
             "docs": [
-              "Number of token accounts registered"
+              "Active count of `token_mints` / `token_vaults`."
             ],
             "type": "u8"
           },
           {
             "name": "token_mints",
             "docs": [
-              "Token mints registered with this treasury (max 10)"
+              "Registered token mints (index-aligned with `token_vaults`)."
             ],
             "type": {
               "array": [
@@ -1638,7 +1804,7 @@
           {
             "name": "token_vaults",
             "docs": [
-              "Token vault addresses (PDA-owned token accounts)"
+              "Treasury-owned vault accounts (PDA `[b\"vault\", mint]`)."
             ],
             "type": {
               "array": [
@@ -1650,14 +1816,14 @@
           {
             "name": "created_at",
             "docs": [
-              "Creation timestamp"
+              "Creation `Clock::unix_timestamp`."
             ],
             "type": "i64"
           },
           {
             "name": "reserved",
             "docs": [
-              "Reserved for future use"
+              "Padding for forward-compat fields."
             ],
             "type": {
               "array": [
@@ -1671,6 +1837,9 @@
     },
     {
       "name": "TreasuryInitialized",
+      "docs": [
+        "Emitted by `initialize`. Marks the Treasury account live."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1691,6 +1860,9 @@
     },
     {
       "name": "UpgradeAuthorityTransferred",
+      "docs": [
+        "Emitted by `transfer_upgrade_authority`."
+      ],
       "type": {
         "kind": "struct",
         "fields": [

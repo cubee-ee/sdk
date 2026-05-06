@@ -27,7 +27,7 @@ export function applySwapFee(amount: bigint, swapFeeRate: number): bigint {
 
 /**
  * LP-accessible balances: lp_actual = actual - pfo; lp_virtual scaled to
- * match. Matches stld's `lp_balances`.
+ * match. Used by the off-chain single-token quote in `math/singleToken`.
  */
 export function lpBalances(actual: bigint, virtualBal: bigint, pfo: bigint): { lpActual: bigint; lpVirtual: bigint } {
   const lpActual = actual >= pfo ? actual - pfo : 0n;
