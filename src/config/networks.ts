@@ -5,7 +5,7 @@ export type Network = "mainnet" | "devnet" | "localnet";
 export interface NetworkPrograms {
   cubicPool: PublicKey;
   singleTokenLiquidity: PublicKey;
-  protocolFeesAuthority: PublicKey;
+  protocolAdmin: PublicKey;
 }
 
 export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
@@ -18,7 +18,7 @@ export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
     singleTokenLiquidity: new PublicKey(
       "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
     ),
-    protocolFeesAuthority: new PublicKey(
+    protocolAdmin: new PublicKey(
       "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
     ),
   },
@@ -27,7 +27,7 @@ export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
     singleTokenLiquidity: new PublicKey(
       "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
     ),
-    protocolFeesAuthority: new PublicKey(
+    protocolAdmin: new PublicKey(
       "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
     ),
   },
@@ -36,7 +36,7 @@ export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
     singleTokenLiquidity: new PublicKey(
       "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
     ),
-    protocolFeesAuthority: new PublicKey(
+    protocolAdmin: new PublicKey(
       "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
     ),
   },

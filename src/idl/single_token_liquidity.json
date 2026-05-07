@@ -100,7 +100,7 @@
         "",
         "# Authority",
         "Treasury PDA only — in practice via CPI from",
-        "`protocol_fees_authority::stld_withdraw_sol`.",
+        "`protocol_admin::stld_withdraw_sol`.",
         "",
         "# Parameters",
         "* `amount` — lamports; > 0 and ≤",
@@ -117,6 +117,14 @@
         38
       ],
       "accounts": [
+        {
+          "name": "config",
+          "docs": [
+            "Cubic-pool config whose `protocol_admin` is the authority for this",
+            "drain. In production it's the Treasury PDA of the `protocol-admin`",
+            "program."
+          ]
+        },
         {
           "name": "source",
           "writable": true
@@ -150,6 +158,19 @@
         156,
         43,
         78
+      ]
+    },
+    {
+      "name": "CubicPoolConfig",
+      "discriminator": [
+        4,
+        29,
+        243,
+        10,
+        142,
+        64,
+        232,
+        118
       ]
     }
   ],
@@ -505,9 +526,29 @@
             "name": "swaps_enabled",
             "docs": [
               "Trading switch — `false` blocks swaps but still allows LP",
-              "add/remove. Either `pool_admin` or `protocol_admin` can flip."
+              "add/remove. Either `pool_admin` or `config.protocol_admin` can flip."
             ],
             "type": "bool"
+          },
+          {
+            "name": "pool_admin",
+            "docs": [
+              "Per-pool admin. Initialised to the wallet that called",
+              "`initialize_cubic_pool`. Allowed to: rotate `swap_fee_rate`,",
+              "toggle `swaps_enabled`, transfer / disable itself via the",
+              "pending/accept/disable flow. Set to `Pubkey::default()` once the",
+              "admin role is renounced — after that, no pool-admin function is",
+              "callable on this pool, ever."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_pool_admin",
+            "docs": [
+              "Pending successor for `pool_admin` during a 2-step transfer.",
+              "`Pubkey::default()` ⇒ no transfer in flight."
+            ],
+            "type": "pubkey"
           },
           {
             "name": "reserved",
@@ -517,7 +558,76 @@
             "type": {
               "array": [
                 "u8",
-                128
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CubicPoolConfig",
+      "docs": [
+        "`CubicPoolConfig` — protocol-level governance for every pool created",
+        "against this account.",
+        "",
+        "One config can host many pools (each pool stores `config: Pubkey`).",
+        "Per-pool admin (level-1: rotates `swap_fee_rate`, toggles `swaps_enabled`)",
+        "lives on `CubicPool::pool_admin`. This config carries only the",
+        "protocol-level admin (level-2) plus protocol-wide defaults."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "protocol_admin",
+            "docs": [
+              "Protocol-level admin. Allowed to: pause pools, change",
+              "`protocol_fee_rate`, collect protocol fees, drain via",
+              "`debug_withdraw_liquidity`, update `banned_extensions`, withdraw",
+              "SOL from program-owned accounts, and rotate itself via the",
+              "pending/accept flow. Set to a designated authority (typically the",
+              "Treasury PDA of the `protocol-admin` program) at config init."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_protocol_admin",
+            "docs": [
+              "Pending successor for `protocol_admin` during a 2-step transfer.",
+              "`Pubkey::default()` ⇒ no transfer in flight."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "default_protocol_fee_rate",
+            "docs": [
+              "Default `protocol_fee_rate` (in basis points, max 5000 = 50%) seeded",
+              "onto every new pool created against this config. Pools may diverge",
+              "later via `set_protocol_fee_rate`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "banned_extensions",
+            "docs": [
+              "Bitmap of banned Token-2022 extension types. Bit N set ⇒ extension",
+              "type N is rejected at pool init. Maintained by `protocol_admin` via",
+              "`set_banned_extensions`. Defaults to `DEFAULT_BANNED_EXTENSIONS`",
+              "(TransferFee, ConfidentialTransfer, NonTransferable, …)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Forward-compatibility padding so future fields can be added without",
+              "migrating existing config accounts."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                120
               ]
             }
           }

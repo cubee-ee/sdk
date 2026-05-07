@@ -16,7 +16,6 @@ export interface PoolFactoryClientParams {
 
 export interface InitializeConfigParams {
   payer: PublicKey;
-  poolAdmin: PublicKey;
   protocolAdmin: PublicKey;
   defaultProtocolFeeRate: number;
 }
@@ -82,7 +81,6 @@ export class PoolFactoryClient {
       const ix = buildInitializeConfigIx(this.config, {
         config: configKeypair.publicKey,
         payer: params.payer,
-        poolAdmin: params.poolAdmin,
         protocolAdmin: params.protocolAdmin,
         defaultProtocolFeeRate: params.defaultProtocolFeeRate,
       });

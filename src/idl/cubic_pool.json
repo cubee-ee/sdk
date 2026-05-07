@@ -8,6 +8,60 @@
   },
   "instructions": [
     {
+      "name": "accept_pool_admin_transfer",
+      "docs": [
+        "Step 2 — pending admin claims."
+      ],
+      "discriminator": [
+        155,
+        46,
+        127,
+        94,
+        247,
+        5,
+        46,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "new_admin",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "accept_protocol_admin_transfer",
+      "docs": [
+        "Step 2 — pending admin claims."
+      ],
+      "discriminator": [
+        109,
+        70,
+        85,
+        195,
+        244,
+        39,
+        244,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "new_admin",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "add_liquidity",
       "docs": [
         "Add proportional liquidity and mint BPT to the user.",
@@ -69,6 +123,60 @@
       ]
     },
     {
+      "name": "cancel_pool_admin_transfer",
+      "docs": [
+        "Cancel a pending pool-admin transfer."
+      ],
+      "discriminator": [
+        151,
+        135,
+        205,
+        125,
+        93,
+        160,
+        135,
+        143
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_protocol_admin_transfer",
+      "docs": [
+        "Cancel a pending protocol-admin transfer."
+      ],
+      "discriminator": [
+        183,
+        26,
+        130,
+        6,
+        131,
+        36,
+        32,
+        186
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "collect_protocol_fees",
       "docs": [
         "Sweep `protocol_fees_owed` for every token to caller-supplied",
@@ -81,7 +189,7 @@
         "`[vault_i, recipient_i, token_program_i]` per token.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_collect_protocol_fees` (CPI)."
+        "`protocol_admin::pool_collect_protocol_fees` (CPI)."
       ],
       "discriminator": [
         22,
@@ -129,7 +237,7 @@
         "* `token_amounts` — per-token withdraw amounts (use 0 to skip).",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_debug_withdraw_liquidity` (CPI),",
+        "`protocol_admin::pool_debug_withdraw_liquidity` (CPI),",
         "driven by `admin-panel/03-emergency-withdraw.ts`."
       ],
       "discriminator": [
@@ -165,6 +273,34 @@
       ]
     },
     {
+      "name": "disable_pool_admin",
+      "docs": [
+        "Permanently renounce pool-admin on this pool. Single-step,",
+        "irreversible."
+      ],
+      "discriminator": [
+        106,
+        106,
+        112,
+        255,
+        92,
+        31,
+        2,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "get_pool_info",
       "docs": [
         "Read-only \"view\": emit a `PoolInfo` event with the pool's full",
@@ -197,20 +333,18 @@
       "docs": [
         "Initialise a new `CubicPoolConfig`. Treasury wrapper passes the",
         "Treasury PDA as both admin pubkeys; direct calls produce",
-        "dead-end configs whose admin instructions are uncallable.",
+        "Initialise a fresh `CubicPoolConfig`.",
         "",
         "# Parameters",
-        "* `pool_admin`               — pubkey allowed to rotate",
-        "`swap_fee_rate`. Production: Treasury PDA.",
-        "* `protocol_admin`           — pubkey allowed to collect fees,",
-        "pause pools, set `protocol_fee_rate`, drain via debug-withdraw,",
-        "update banned extensions. Production: Treasury PDA.",
+        "* `protocol_admin`           — pubkey allowed to pause pools, set",
+        "`protocol_fee_rate`, collect fees, drain via debug-withdraw,",
+        "update banned extensions, and rotate itself via the",
+        "pending/accept flow.",
         "* `default_protocol_fee_rate`— seeded onto every new pool under",
         "this config (basis points, ≤ `MAX_PROTOCOL_FEE_RATE`).",
         "",
-        "# Used by",
-        "`protocol_fees_authority::pool_initialize_config` (CPI), or direct",
-        "dev/test calls."
+        "Pool-admin (level-1) is per-pool — set automatically to the wallet",
+        "that calls `initialize_cubic_pool`."
       ],
       "discriminator": [
         208,
@@ -225,20 +359,13 @@
       "accounts": [
         {
           "name": "config",
-          "docs": [
-            "Brand-new `CubicPoolConfig` account. Anchor creates it; the",
-            "caller supplies the keypair / signer in the outer transaction."
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "payer",
           "docs": [
-            "Pays the rent for `config`. AUDIT-FIX C-14 made this a `Signer`",
-            "(was `UncheckedAccount`) — when called via the treasury wrapper,",
-            "the human admin signs as payer; the treasury PDA is passed as the",
-            "admin pubkeys."
+            "Pays the rent for `config`. Must be a `Signer`."
           ],
           "writable": true,
           "signer": true
@@ -248,10 +375,6 @@
         }
       ],
       "args": [
-        {
-          "name": "pool_admin",
-          "type": "pubkey"
-        },
         {
           "name": "protocol_admin",
           "type": "pubkey"
@@ -367,11 +490,75 @@
       ]
     },
     {
+      "name": "initiate_pool_admin_transfer",
+      "docs": [
+        "Step 1 — current `pool.pool_admin` proposes a successor."
+      ],
+      "discriminator": [
+        10,
+        148,
+        147,
+        98,
+        73,
+        190,
+        31,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "initiate_protocol_admin_transfer",
+      "docs": [
+        "Step 1 — current `config.protocol_admin` proposes a successor."
+      ],
+      "discriminator": [
+        167,
+        129,
+        39,
+        182,
+        10,
+        106,
+        51,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "remove_liquidity",
       "docs": [
         "Burn BPT proportionally and pay out tokens.",
         "",
-        "# Q8 floor",
+        "# Minimum-supply floor",
         "The pool always retains at least `MINIMUM_INITIAL_BPT` of supply",
         "so the proportional math never sees a zero-supply state. If the",
         "caller's `bpt_amount` would push supply below the floor, the burn",
@@ -440,7 +627,7 @@
         "`protocol_admin` AND Treasury PDA.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_set_banned_extensions` (CPI)."
+        "`protocol_admin::pool_set_banned_extensions` (CPI)."
       ],
       "discriminator": [
         86,
@@ -479,7 +666,7 @@
         "`protocol_admin` AND Treasury PDA.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_set_pool_enabled` (CPI)."
+        "`protocol_admin::pool_set_pool_enabled` (CPI)."
       ],
       "discriminator": [
         53,
@@ -523,7 +710,7 @@
         "* `protocol_fee_rate` — basis points, ≤ `MAX_PROTOCOL_FEE_RATE`.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_set_protocol_fee_rate` (CPI)."
+        "`protocol_admin::pool_set_protocol_fee_rate` (CPI)."
       ],
       "discriminator": [
         95,
@@ -567,7 +754,7 @@
         "* `swap_fee_rate` — hundredths of bps, ≤ `MAX_SWAP_FEE_RATE`.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_set_swap_fee_rate` (CPI)."
+        "`protocol_admin::pool_set_swap_fee_rate` (CPI)."
       ],
       "discriminator": [
         144,
@@ -581,13 +768,10 @@
       ],
       "accounts": [
         {
-          "name": "config"
-        },
-        {
           "name": "pool",
           "docs": [
-            "Mutated. The cross-check `pool.config == config.key()` prevents a",
-            "caller from pairing an unrelated `config` with this pool."
+            "Mutated. `authority` must equal `pool.pool_admin` (storage-only",
+            "admin pubkey; no hardcoded address)."
           ],
           "writable": true
         },
@@ -613,7 +797,7 @@
         "`pool_admin` OR `protocol_admin`, AND Treasury PDA.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_set_swaps_enabled` (CPI)."
+        "`protocol_admin::pool_set_swaps_enabled` (CPI)."
       ],
       "discriminator": [
         144,
@@ -635,9 +819,6 @@
         },
         {
           "name": "authority",
-          "docs": [
-            "Validated inside the handler."
-          ],
           "signer": true
         }
       ],
@@ -750,7 +931,7 @@
         "`source.lamports() - rent_exempt_minimum(source.data_len())`.",
         "",
         "# Used by",
-        "`protocol_fees_authority::pool_withdraw_sol` (CPI)."
+        "`protocol_admin::pool_withdraw_sol` (CPI)."
       ],
       "discriminator": [
         145,
@@ -763,6 +944,9 @@
         38
       ],
       "accounts": [
+        {
+          "name": "config"
+        },
         {
           "name": "source",
           "writable": true
@@ -866,6 +1050,58 @@
       ]
     },
     {
+      "name": "PoolAdminDisabled",
+      "discriminator": [
+        158,
+        98,
+        202,
+        37,
+        243,
+        57,
+        247,
+        87
+      ]
+    },
+    {
+      "name": "PoolAdminTransferCancelled",
+      "discriminator": [
+        238,
+        53,
+        38,
+        143,
+        194,
+        45,
+        206,
+        179
+      ]
+    },
+    {
+      "name": "PoolAdminTransferInitiated",
+      "discriminator": [
+        33,
+        195,
+        202,
+        133,
+        209,
+        42,
+        157,
+        78
+      ]
+    },
+    {
+      "name": "PoolAdminTransferred",
+      "discriminator": [
+        123,
+        48,
+        231,
+        186,
+        53,
+        67,
+        156,
+        254
+      ]
+    },
+    {
       "name": "PoolEnabledUpdated",
       "discriminator": [
         101,
@@ -928,6 +1164,45 @@
         10,
         140,
         224
+      ]
+    },
+    {
+      "name": "ProtocolAdminTransferCancelled",
+      "discriminator": [
+        46,
+        120,
+        187,
+        57,
+        136,
+        63,
+        89,
+        7
+      ]
+    },
+    {
+      "name": "ProtocolAdminTransferInitiated",
+      "discriminator": [
+        78,
+        207,
+        188,
+        146,
+        26,
+        65,
+        40,
+        167
+      ]
+    },
+    {
+      "name": "ProtocolAdminTransferred",
+      "discriminator": [
+        140,
+        30,
+        55,
+        121,
+        105,
+        75,
+        148,
+        68
       ]
     },
     {
@@ -1161,6 +1436,31 @@
       "code": 6032,
       "name": "WouldBreakRentExempt",
       "msg": "Withdrawal would break rent exemption"
+    },
+    {
+      "code": 6033,
+      "name": "PoolAdminDisabled",
+      "msg": "Pool admin is disabled"
+    },
+    {
+      "code": 6034,
+      "name": "ProtocolAdminUnset",
+      "msg": "Protocol admin is unset"
+    },
+    {
+      "code": 6035,
+      "name": "NoPendingAdmin",
+      "msg": "No pending admin transfer"
+    },
+    {
+      "code": 6036,
+      "name": "NotPendingAdmin",
+      "msg": "Signer is not the pending admin"
+    },
+    {
+      "code": 6037,
+      "name": "InvalidPendingAdmin",
+      "msg": "Pending admin cannot be the zero pubkey"
     }
   ],
   "types": [
@@ -1367,9 +1667,29 @@
             "name": "swaps_enabled",
             "docs": [
               "Trading switch — `false` blocks swaps but still allows LP",
-              "add/remove. Either `pool_admin` or `protocol_admin` can flip."
+              "add/remove. Either `pool_admin` or `config.protocol_admin` can flip."
             ],
             "type": "bool"
+          },
+          {
+            "name": "pool_admin",
+            "docs": [
+              "Per-pool admin. Initialised to the wallet that called",
+              "`initialize_cubic_pool`. Allowed to: rotate `swap_fee_rate`,",
+              "toggle `swaps_enabled`, transfer / disable itself via the",
+              "pending/accept/disable flow. Set to `Pubkey::default()` once the",
+              "admin role is renounced — after that, no pool-admin function is",
+              "callable on this pool, ever."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_pool_admin",
+            "docs": [
+              "Pending successor for `pool_admin` during a 2-step transfer.",
+              "`Pubkey::default()` ⇒ no transfer in flight."
+            ],
+            "type": "pubkey"
           },
           {
             "name": "reserved",
@@ -1379,7 +1699,7 @@
             "type": {
               "array": [
                 "u8",
-                128
+                64
               ]
             }
           }
@@ -1389,38 +1709,34 @@
     {
       "name": "CubicPoolConfig",
       "docs": [
-        "`CubicPoolConfig` — governance + defaults shared by every pool created",
-        "against a given config account.",
+        "`CubicPoolConfig` — protocol-level governance for every pool created",
+        "against this account.",
         "",
         "One config can host many pools (each pool stores `config: Pubkey`).",
-        "Production configs have both admin fields wired to the Treasury PDA so",
-        "that admin instructions can only be invoked through the",
-        "`protocol_fees_authority` program. Configs initialised any other way",
-        "produce dead-end pools (no admin call can satisfy the",
-        "`signer == TREASURY_PDA` constraint).",
-        "",
-        "Storage layout MUST stay byte-identical across upgrades — clients read",
-        "fields by offset (see `backend/src/services/onchainPoolFetcher.ts`)."
+        "Per-pool admin (level-1: rotates `swap_fee_rate`, toggles `swaps_enabled`)",
+        "lives on `CubicPool::pool_admin`. This config carries only the",
+        "protocol-level admin (level-2) plus protocol-wide defaults."
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "pool_admin",
+            "name": "protocol_admin",
             "docs": [
-              "Authority that can rotate `swap_fee_rate` for any pool under this",
-              "config. Set to Treasury PDA in production. Originally named",
-              "`fee_authority` (cubic-pool ≤ 0.5)."
+              "Protocol-level admin. Allowed to: pause pools, change",
+              "`protocol_fee_rate`, collect protocol fees, drain via",
+              "`debug_withdraw_liquidity`, update `banned_extensions`, withdraw",
+              "SOL from program-owned accounts, and rotate itself via the",
+              "pending/accept flow. Set to a designated authority (typically the",
+              "Treasury PDA of the `protocol-admin` program) at config init."
             ],
             "type": "pubkey"
           },
           {
-            "name": "protocol_admin",
+            "name": "pending_protocol_admin",
             "docs": [
-              "Authority that can collect protocol fees, pause pools, change",
-              "`protocol_fee_rate`, drain via `debug_withdraw_liquidity`, and update",
-              "`banned_extensions`. Set to Treasury PDA in production. Originally",
-              "named `collect_protocol_fees_authority`."
+              "Pending successor for `protocol_admin` during a 2-step transfer.",
+              "`Pubkey::default()` ⇒ no transfer in flight."
             ],
             "type": "pubkey"
           },
@@ -1447,8 +1763,7 @@
             "name": "reserved",
             "docs": [
               "Forward-compatibility padding so future fields can be added without",
-              "migrating existing config accounts (anchor's `INIT_SPACE` only",
-              "matters at create time; on-chain layout is fixed at `LEN`)."
+              "migrating existing config accounts."
             ],
             "type": {
               "array": [
@@ -1558,6 +1873,98 @@
             "type": {
               "vec": "u64"
             }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolAdminDisabled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolAdminTransferCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_pending",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolAdminTransferInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "current_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolAdminTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_admin",
+            "type": "pubkey"
           },
           {
             "name": "timestamp",
@@ -1833,6 +2240,78 @@
           {
             "name": "swaps_enabled",
             "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolAdminTransferCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_pending",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolAdminTransferInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "current_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolAdminTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_admin",
+            "type": "pubkey"
           },
           {
             "name": "timestamp",

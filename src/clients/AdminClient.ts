@@ -9,19 +9,19 @@ import {
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import { CubeConfig } from "../config";
-import { PROTOCOL_FEES_AUTHORITY_IDL } from "../idl";
+import { PROTOCOL_ADMIN_IDL } from "../idl";
 import { deriveTreasuryPda } from "../utils/pda";
 
 /**
- * AdminClient — wraps `protocol_fees_authority` with treasury-routed admin
+ * AdminClient — wraps `protocol_admin` with treasury-routed admin
  * operations.
  *
  * The cubic_pool program enforces that every admin instruction must be
  * signed by the Treasury PDA (`seeds = [b"treasury"]`, owned by
- * protocol_fees_authority). This client builds the canonical flow:
+ * protocol_admin). This client builds the canonical flow:
  *
  *     admin wallet
- *       → protocol_fees_authority.<wrapper>     (treasury.admin == signer)
+ *       → protocol_admin.<wrapper>     (treasury.admin == signer)
  *       → CPI cubic_pool.<admin_ix>             (signer == TREASURY_PDA)
  *
  * Direct calls into cubic_pool admin instructions will fail on-chain.
@@ -36,11 +36,11 @@ export class AdminClient {
 
   constructor(opts: { config: CubeConfig; provider: anchor.AnchorProvider }) {
     const { config, provider } = opts;
-    const idl = JSON.parse(JSON.stringify(PROTOCOL_FEES_AUTHORITY_IDL)) as any;
-    idl.address = config.programs.protocolFeesAuthority.toString();
+    const idl = JSON.parse(JSON.stringify(PROTOCOL_ADMIN_IDL)) as any;
+    idl.address = config.programs.protocolAdmin.toString();
     this.program = new Program(idl, provider) as any;
     this.cubicPoolProgramId = config.programs.cubicPool;
-    [this.treasuryPda] = deriveTreasuryPda(config.programs.protocolFeesAuthority);
+    [this.treasuryPda] = deriveTreasuryPda(config.programs.protocolAdmin);
   }
 
   /**
@@ -142,12 +142,10 @@ export class AdminClient {
       .instruction();
   }
 
-  setSwapFeeRateIx(admin: PublicKey, config: PublicKey, pool: PublicKey, swapFeeRate: number) {
-    return (this.program.methods as any)
-      .poolSetSwapFeeRate(swapFeeRate)
-      .accounts({ ...this.poolAdminAccounts(admin, config, pool) })
-      .instruction();
-  }
+  // setSwapFeeRate has been removed from the protocol-admin wrapper —
+  // it's a level-1 (pool-admin) instruction, signed directly by the
+  // wallet stored in `pool.pool_admin`. Use `CubicPoolClient` for that
+  // call instead.
 
   setProtocolFeeRateIx(admin: PublicKey, config: PublicKey, pool: PublicKey, protocolFeeRate: number) {
     return (this.program.methods as any)

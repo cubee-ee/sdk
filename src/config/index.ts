@@ -75,7 +75,7 @@ export const MINIMUM_INITIAL_BPT = 1_000n;
 export const SLIPPAGE_PRECISION = 1_000_000;
 export const MIN_SLIPPAGE_HBPS = 10; // 0.001 %
 
-export type ProgramIdKind = "cubicPool" | "singleTokenLiquidity" | "protocolFeesAuthority";
+export type ProgramIdKind = "cubicPool" | "singleTokenLiquidity" | "protocolAdmin";
 
 export function programId(cfg: CubeConfig, kind: ProgramIdKind): PublicKey {
   return cfg.programs[kind];

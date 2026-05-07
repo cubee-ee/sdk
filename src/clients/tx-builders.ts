@@ -419,11 +419,12 @@ export function buildSingleTokenDepositTx(
 
 export function buildInitializeConfigIx(
   cfg: CubeConfig,
-  params: { config: PublicKey; payer: PublicKey; poolAdmin: PublicKey; protocolAdmin: PublicKey; defaultProtocolFeeRate: number }
+  params: { config: PublicKey; payer: PublicKey; protocolAdmin: PublicKey; defaultProtocolFeeRate: number }
 ): TransactionInstruction {
+  // cubic_pool v0.5.1 initialize_config takes only (protocol_admin, default_protocol_fee_rate).
+  // pool_admin is per-pool and set inside initialize_cubic_pool to the payer.
   const data = Buffer.concat([
     computeDiscriminator("initialize_config"),
-    params.poolAdmin.toBuffer(),
     params.protocolAdmin.toBuffer(),
     encodeU16(params.defaultProtocolFeeRate),
   ]);
