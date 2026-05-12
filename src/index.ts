@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: BUSL-1.1
-// Copyright (c) 2026 Endgame AMM DEX Foundation. All rights reserved.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Endgame AMM DEX Foundation.
 // See LICENSE at the repository root.
 
 /**
