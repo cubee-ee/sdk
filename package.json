@@ -1,6 +1,9 @@
 {
-  "name": "@cube/sdk",
-  "version": "0.1.0",
+  "name": "@cubee_ee/sdk",
+  "version": "0.1.1",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Cube DEX SDK — client library for interacting with the Cubic Pool AMM on Solana",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
