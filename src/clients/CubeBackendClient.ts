@@ -36,6 +36,32 @@ export interface PriceMap {
   [mint: string]: number;
 }
 
+// ── Leaderboard types ──
+
+export interface LeaderboardEntry {
+  address: string;
+  points: number;
+  place: number;
+}
+
+export interface LeaderboardResponse {
+  total: number;
+  page: number;
+  limit: number;
+  data: LeaderboardEntry[];
+}
+
+export interface LeaderboardUserStats {
+  place: number;
+  address: string;
+  points: number;
+  lastAccrualSwapUsd: number;
+  lastAccrualLiqUsd: number;
+  lastAccrualAt: string | null;
+  cumulativeSwapVolumeUsd: number;
+  cumulativeNetLiquidityUsd: number;
+}
+
 /**
  * REST wrapper around the Cube backend. Every method is a SdkResult; no
  * exceptions escape. If a request fails, the result carries a
@@ -120,6 +146,27 @@ export class CubeBackendClient {
   ): Promise<SdkResult<T>> {
     const qs = new URLSearchParams({ tokenIn, tokenOut, amountIn });
     return this.getDataField<T>(`/api/swap/route?${qs.toString()}`);
+  }
+
+  // ── Leaderboard ──
+
+  getLeaderboard(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<SdkResult<LeaderboardResponse>> {
+    const qs = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    return this.get<LeaderboardResponse>(`/api/leaderboard?${qs.toString()}`);
+  }
+
+  getLeaderboardUser(
+    address: string,
+  ): Promise<SdkResult<LeaderboardUserStats>> {
+    return this.getDataField<LeaderboardUserStats>(
+      `/api/leaderboard/user/${encodeURIComponent(address)}`,
+    );
   }
 
   getTokenPrices(mints: string[]): Promise<SdkResult<PriceMap>> {
