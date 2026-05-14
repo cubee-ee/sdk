@@ -419,17 +419,27 @@ export function buildSingleTokenDepositTx(
 
 export function buildInitializeConfigIx(
   cfg: CubeConfig,
-  params: { config: PublicKey; payer: PublicKey; protocolAdmin: PublicKey; defaultProtocolFeeRate: number }
+  params: { config: PublicKey; payer: PublicKey; defaultProtocolFeeRate: number }
 ): TransactionInstruction {
-  // cubic_pool v0.5.1 initialize_config takes only (protocol_admin, default_protocol_fee_rate).
-  // pool_admin is per-pool and set inside initialize_cubic_pool to the payer.
+  // cubic_pool v0.6.0 initialize_config:
+  //   - the program now enforces `protocol_admin == TreasuryPDA(protocol-admin)`
+  //   - the Treasury PDA is passed as an account; Anchor derives it from
+  //     seeds [b"treasury"] on the protocol-admin program ID and rejects
+  //     anything else, so neither the caller nor the SDK can substitute
+  //     a wallet here. The on-chain `config.protocol_admin` field will
+  //     always be this PDA.
+  const [treasuryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury")],
+    cfg.programs.protocolAdmin
+  );
   const data = Buffer.concat([
     computeDiscriminator("initialize_config"),
-    params.protocolAdmin.toBuffer(),
+    treasuryPda.toBuffer(),
     encodeU16(params.defaultProtocolFeeRate),
   ]);
   const keys: AccountMeta[] = [
     { pubkey: params.config, isSigner: true, isWritable: true },
+    { pubkey: treasuryPda, isSigner: false, isWritable: false },
     { pubkey: params.payer, isSigner: true, isWritable: true },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
