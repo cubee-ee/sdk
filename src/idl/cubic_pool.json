@@ -363,6 +363,17 @@
           "signer": true
         },
         {
+          "name": "protocol_admin_treasury",
+          "docs": [
+            "`seeds` + `seeds::program` constraint Anchor enforces here is",
+            "the entire validation — any account passed in that isn't that",
+            "exact PDA fails before the handler runs. The handler then",
+            "requires the `protocol_admin` argument to equal this account's",
+            "key, so on-chain `config.protocol_admin` can only ever be the",
+            "Treasury PDA."
+          ]
+        },
+        {
           "name": "payer",
           "docs": [
             "Pays the rent for `config`. Must be a `Signer`."
@@ -1461,6 +1472,11 @@
       "code": 6037,
       "name": "InvalidPendingAdmin",
       "msg": "Pending admin cannot be the zero pubkey"
+    },
+    {
+      "code": 6038,
+      "name": "ProtocolAdminNotTreasury",
+      "msg": "protocol_admin must equal the hardcoded Treasury PDA"
     }
   ],
   "types": [

@@ -207,6 +207,43 @@
       ]
     },
     {
+      "name": "pool_accept_protocol_admin_transfer",
+      "docs": [
+        "Step 2 — accept the in-flight `protocol_admin` transfer with the",
+        "Treasury PDA as the new admin. Signs the cubic-pool accept CPI",
+        "with treasury seeds, so the Treasury PDA itself becomes",
+        "`config.protocol_admin`. Required because a PDA cannot sign",
+        "cubic-pool's `accept_protocol_admin_transfer` directly."
+      ],
+      "discriminator": [
+        34,
+        167,
+        199,
+        116,
+        14,
+        203,
+        208,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "pool_cancel_protocol_admin_transfer",
       "docs": [
         "Cancel an in-flight `protocol_admin` transfer on a config."
@@ -979,6 +1016,19 @@
       ]
     },
     {
+      "name": "PoolProtocolAdminTransferAccepted",
+      "discriminator": [
+        235,
+        91,
+        63,
+        65,
+        174,
+        42,
+        55,
+        129
+      ]
+    },
+    {
       "name": "PoolProtocolAdminTransferCancelled",
       "discriminator": [
         206,
@@ -1398,6 +1448,26 @@
           },
           {
             "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolProtocolAdminTransferAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "config",
             "type": "pubkey"
           },
           {
