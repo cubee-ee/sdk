@@ -80,6 +80,26 @@ throws for I/O or parse errors.
 
 **In the frontend:** only UI rendering + state management (zustand / redux) + wallet integration. No raw RPC calls, no borsh, no math.
 
+## Token-2022 support
+
+Pools may mix the classic SPL Token program and Token-2022. Every
+`PoolTokenInfo` carries a `tokenProgram` field decoded straight from
+the on-chain pool account. The transaction builders
+(`buildSwapTx`, `buildAddLiquidityTx`, `buildRemoveLiquidityTx`,
+`buildSingleTokenDepositTx`) thread `token.tokenProgram` through ATA
+derivation and remaining-accounts assembly, so consumers do not need
+to special-case Token-2022 on the call site.
+
+Caveats:
+- The BPT mint is always created under classic SPL Token. Pass
+  `bptTokenProgram` only if you need a non-default program for the
+  BPT itself.
+- Mints with transfer fees, transfer hooks, or other Token-2022
+  extensions that mutate amounts on transfer are not supported by
+  the AMM contract — the post-transfer vault balance must equal the
+  amount the math computed, otherwise `add_liquidity` and `swap`
+  revert with `BalanceMismatch`.
+
 ## Examples
 
 See `examples/*.ts`:
