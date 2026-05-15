@@ -118,8 +118,8 @@ export class CubeBackendClient {
     return this.getDataField<T>("/api/pools/stats");
   }
 
-  getPortfolio<T>(owner: string): Promise<SdkResult<T>> {
-    return this.getDataField<T>(`/api/pools/portfolio?owner=${encodeURIComponent(owner)}`);
+  getPortfolio<T>(wallet: string): Promise<SdkResult<T>> {
+    return this.getDataField<T>(`/api/pools/portfolio?wallet=${encodeURIComponent(wallet)}`);
   }
 
   getAllTokens<T>(): Promise<SdkResult<T>> {
