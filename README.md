@@ -1,9 +1,21 @@
-# @cube/sdk
+# @cubee_ee/sdk
+
+[![npm](https://img.shields.io/npm/v/@cubee_ee/sdk.svg)](https://www.npmjs.com/package/@cubee_ee/sdk)
+
+📦 **npm**: <https://www.npmjs.com/package/@cubee_ee/sdk>
 
 Client library for the Cubic Pool AMM on Solana. Targeted at both frontend
 and backend consumers; no bundler-specific code.
 
-## Install (workspace-local)
+## Install
+
+```bash
+npm install @cubee_ee/sdk
+# or
+yarn add @cubee_ee/sdk
+```
+
+Workspace-local development (linking against the in-repo source):
 
 ```bash
 cd sdk
@@ -16,7 +28,7 @@ From sibling packages:
 ```json
 {
   "dependencies": {
-    "@cube/sdk": "file:../sdk"
+    "@cubee_ee/sdk": "file:../sdk"
   }
 }
 ```
