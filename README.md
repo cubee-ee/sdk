@@ -36,18 +36,25 @@ From sibling packages:
 ## Quick start
 
 ```ts
-import { getConfig, CubicPoolClient, CubeBackendClient } from "@cube/sdk";
+import { getConfig, CubicPoolClient, CubeBackendClient } from "@cubee_ee/sdk";
 import { PublicKey } from "@solana/web3.js";
 
 const config = getConfig("mainnet", {
   backendEndpoint: "https://api.cube.fi",
+  // Optional: put your paid RPC first; SDK falls back to the defaults below.
+  rpcEndpoints: [
+    process.env.CUBE_RPC_URL!,
+    "https://api.mainnet-beta.solana.com",
+    "https://solana-rpc.publicnode.com",
+    "https://solana.api.pocket.network",
+  ],
+  rpcTimeoutMs: 2_000,
   slippageHundredthsBps: 30_000, // 3 %
 });
 
 const pool = new CubicPoolClient({
   config,
   poolAddress: new PublicKey("..."),
-  rpc: { endpoint: config.defaults.rpcEndpoint, apiKey: process.env.RPC_API_KEY },
 });
 
 const res = await pool.sync();
@@ -74,6 +81,12 @@ clients/      RpcClient, CubeBackendClient, CubicPoolClient
 idl/          Anchor IDL exports generated from the current contracts
 examples/     Runnable scripts demonstrating each capability
 ```
+
+`RpcClient` rotates through `config.defaults.rpcEndpoints` for every RPC call.
+If one endpoint times out or returns a transient provider error, the SDK tries
+the next endpoint instead of waiting on the same RPC. Mainnet defaults are
+no-key public endpoints; production frontends should prepend their paid RPC via
+`getConfig("mainnet", { rpcEndpoints: [...] })`.
 
 Every public method returns `SdkResult<T>` — either `{ ok: true, data }`
 or `{ ok: false, error: { code, humanMessage, cause? } }`. The SDK never

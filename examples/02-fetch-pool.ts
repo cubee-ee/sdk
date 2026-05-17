@@ -10,7 +10,6 @@ async function main() {
   const pool = new CubicPoolClient({
     config: cfg,
     poolAddress: addr,
-    rpc: { endpoint: cfg.defaults.rpcEndpoint },
   });
   const res = await pool.sync();
   if (!res.ok) {

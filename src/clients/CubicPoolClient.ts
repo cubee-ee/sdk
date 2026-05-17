@@ -37,12 +37,15 @@ import { SingleTokenDepositClient } from "./SingleTokenDepositClient";
 export interface CubicPoolClientParams {
   config: CubeConfig;
   poolAddress: PublicKey;
-  rpc:
+  rpc?:
     | RpcClient
     | {
-        endpoint: string;
+        endpoint?: string;
+        endpoints?: string[];
+        fallbackEndpoints?: string[];
         apiKey?: string;
         commitment?: Commitment;
+        timeoutMs?: number;
       };
 }
 
@@ -64,9 +67,12 @@ export class CubicPoolClient {
       params.rpc instanceof RpcClient
         ? params.rpc
         : new RpcClient({
-            endpoint: params.rpc.endpoint,
-            apiKey: params.rpc.apiKey,
-            commitment: params.rpc.commitment ?? params.config.defaults.rpcCommitment,
+            endpoint: params.rpc?.endpoint,
+            endpoints: params.rpc?.endpoints ?? (params.rpc?.endpoint ? undefined : params.config.defaults.rpcEndpoints),
+            fallbackEndpoints: params.rpc?.fallbackEndpoints,
+            apiKey: params.rpc?.apiKey,
+            commitment: params.rpc?.commitment ?? params.config.defaults.rpcCommitment,
+            timeoutMs: params.rpc?.timeoutMs ?? params.config.defaults.rpcTimeoutMs,
           });
   }
 

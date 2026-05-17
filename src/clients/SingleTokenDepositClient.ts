@@ -17,7 +17,14 @@ export interface SingleTokenDepositClientParams {
   config: CubeConfig;
   poolAddress: PublicKey;
   /** Optional — reuses an existing one if provided. */
-  rpc?: RpcClient | { endpoint: string; apiKey?: string; commitment?: Commitment };
+  rpc?: RpcClient | {
+    endpoint?: string;
+    endpoints?: string[];
+    fallbackEndpoints?: string[];
+    apiKey?: string;
+    commitment?: Commitment;
+    timeoutMs?: number;
+  };
   /**
    * Optional parent pool client — lets the deposit client reuse an already
    * synced PoolInfo instead of making a fresh RPC round-trip.
@@ -48,8 +55,9 @@ export class SingleTokenDepositClient {
         rpc:
           params.rpc ??
           {
-            endpoint: params.config.defaults.rpcEndpoint,
+            endpoints: params.config.defaults.rpcEndpoints,
             commitment: params.config.defaults.rpcCommitment,
+            timeoutMs: params.config.defaults.rpcTimeoutMs,
           },
       });
   }

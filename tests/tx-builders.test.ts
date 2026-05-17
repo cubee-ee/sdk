@@ -123,8 +123,6 @@ describe("tx-builders discriminators", () => {
     const initConfig = buildInitializeConfigIx(cfg, {
       config: pk(),
       payer: user,
-      poolAdmin: user,
-      protocolAdmin: user,
       defaultProtocolFeeRate: 1000,
     });
 

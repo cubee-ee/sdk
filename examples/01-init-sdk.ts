@@ -10,6 +10,7 @@ const config = getConfig("devnet", {
   backendEndpoint: "https://api-devnet.cube.fi",
   slippageHundredthsBps: 50_000, // 5 %
   cuLimit: 1_400_000,
+  rpcTimeoutMs: 2_000,
 });
 
 console.log("Network:", config.network);
@@ -18,6 +19,7 @@ console.log("Programs:", {
   singleTokenLiquidity: config.programs.singleTokenLiquidity.toBase58(),
 });
 console.log("RPC:", config.defaults.rpcEndpoint);
+console.log("RPC fallbacks:", config.defaults.rpcEndpoints);
 
 // Backend client
 const backend = new CubeBackendClient({ apiEndpoint: config.backendEndpoint! });
@@ -28,6 +30,5 @@ const poolAddr = new PublicKey("11111111111111111111111111111111");
 const pool = new CubicPoolClient({
   config,
   poolAddress: poolAddr,
-  rpc: { endpoint: config.defaults.rpcEndpoint },
 });
 void pool;
