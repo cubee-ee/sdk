@@ -3,15 +3,15 @@
 // See LICENSE at the repository root.
 
 /**
- * @cube/sdk — client library for the Cubic Pool AMM on Solana.
+ * @cubee_ee/sdk — client library for the Cubic Pool AMM on Solana.
  *
  * Entry point barrel. Most consumers will want to import from this root:
  *
  * ```ts
- * import { CubicPoolClient, CubeBackendClient, getConfig } from "@cube/sdk";
+ * import { CubicPoolClient, CubeBackendClient, getConfig } from "@cubee_ee/sdk";
  *
  * const cfg = getConfig("mainnet", { backendEndpoint: "https://api.cube.fi" });
- * const pool = new CubicPoolClient({ config: cfg, poolAddress, rpc: { endpoint: cfg.defaults.rpcEndpoint } });
+ * const pool = new CubicPoolClient({ config: cfg, poolAddress });
  * const info = await pool.sync();
  * if (info.ok) console.log(info.data.tokens.map(t => t.metadata?.symbol));
  * ```
@@ -48,7 +48,12 @@ export {
   SLIPPAGE_PRECISION,
   MIN_SLIPPAGE_HBPS,
 } from "./config";
-export { NETWORK_PROGRAMS, DEFAULT_RPC_ENDPOINT } from "./config/networks";
+export {
+  NETWORK_PROGRAMS,
+  DEFAULT_RPC_ENDPOINT,
+  DEFAULT_RPC_ENDPOINTS,
+  DEFAULT_RPC_TIMEOUT_MS,
+} from "./config/networks";
 export { KNOWN_TOKENS, resolveKnownToken } from "./config/tokens";
 export { ok, err } from "./types/result";
 export {

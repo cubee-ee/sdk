@@ -47,3 +47,15 @@ export const DEFAULT_RPC_ENDPOINT: Record<Network, string> = {
   devnet: "https://api.devnet.solana.com",
   localnet: "http://127.0.0.1:8899",
 };
+
+export const DEFAULT_RPC_ENDPOINTS: Record<Network, string[]> = {
+  mainnet: [
+    "https://api.mainnet-beta.solana.com",
+    "https://solana-rpc.publicnode.com",
+    "https://solana.api.pocket.network",
+  ],
+  devnet: ["https://api.devnet.solana.com"],
+  localnet: ["http://127.0.0.1:8899"],
+};
+
+export const DEFAULT_RPC_TIMEOUT_MS = 2_000;

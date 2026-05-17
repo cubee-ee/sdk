@@ -1,5 +1,12 @@
 import { Commitment, PublicKey } from "@solana/web3.js";
-import { NETWORK_PROGRAMS, NetworkPrograms, Network, DEFAULT_RPC_ENDPOINT } from "./networks";
+import {
+  NETWORK_PROGRAMS,
+  NetworkPrograms,
+  Network,
+  DEFAULT_RPC_ENDPOINT,
+  DEFAULT_RPC_ENDPOINTS,
+  DEFAULT_RPC_TIMEOUT_MS,
+} from "./networks";
 import { TokenInfo } from "./tokens";
 
 export * from "./networks";
@@ -14,6 +21,8 @@ export interface CubeConfig {
   programs: NetworkPrograms;
   defaults: {
     rpcEndpoint: string;
+    rpcEndpoints: string[];
+    rpcTimeoutMs: number;
     rpcCommitment: Commitment;
     /** Used by helpers that prepend a ComputeBudget instruction. */
     cuLimit: number;
@@ -32,6 +41,8 @@ export interface CubeConfig {
 
 export interface CubeConfigOverrides {
   rpcEndpoint?: string;
+  rpcEndpoints?: string[];
+  rpcTimeoutMs?: number;
   rpcCommitment?: Commitment;
   cuLimit?: number;
   slippageHundredthsBps?: number;
@@ -41,11 +52,14 @@ export interface CubeConfigOverrides {
 
 /** Build a CubeConfig for the named network with optional overrides. */
 export function getConfig(network: Network, overrides: CubeConfigOverrides = {}): CubeConfig {
+  const rpcEndpoints = resolveRpcEndpoints(network, overrides);
   return {
     network,
     programs: NETWORK_PROGRAMS[network],
     defaults: {
-      rpcEndpoint: overrides.rpcEndpoint ?? DEFAULT_RPC_ENDPOINT[network],
+      rpcEndpoint: rpcEndpoints[0] ?? overrides.rpcEndpoint ?? DEFAULT_RPC_ENDPOINT[network],
+      rpcEndpoints,
+      rpcTimeoutMs: overrides.rpcTimeoutMs ?? DEFAULT_RPC_TIMEOUT_MS,
       rpcCommitment: overrides.rpcCommitment ?? "confirmed",
       cuLimit: overrides.cuLimit ?? 1_400_000,
       slippageHundredthsBps: overrides.slippageHundredthsBps ?? 50_000,
@@ -53,6 +67,20 @@ export function getConfig(network: Network, overrides: CubeConfigOverrides = {})
     tokens: overrides.tokens,
     backendEndpoint: overrides.backendEndpoint,
   };
+}
+
+function resolveRpcEndpoints(network: Network, overrides: CubeConfigOverrides): string[] {
+  if (overrides.rpcEndpoints && overrides.rpcEndpoints.length > 0) {
+    return dedupe(overrides.rpcEndpoints);
+  }
+  if (overrides.rpcEndpoint) {
+    return dedupe([overrides.rpcEndpoint, ...DEFAULT_RPC_ENDPOINTS[network]]);
+  }
+  return [...DEFAULT_RPC_ENDPOINTS[network]];
+}
+
+function dedupe(values: string[]): string[] {
+  return Array.from(new Set(values));
 }
 
 export const CUBIC_POOL_SEED = Buffer.from("cubic_pool");
