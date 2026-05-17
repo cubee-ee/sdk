@@ -58,8 +58,49 @@ export interface LeaderboardUserStats {
   lastAccrualSwapUsd: number;
   lastAccrualLiqUsd: number;
   lastAccrualAt: string | null;
-  cumulativeSwapVolumeUsd: number;
-  cumulativeNetLiquidityUsd: number;
+}
+
+export interface XpAccrualHistoryEntry {
+  accrualTime: string;
+  swapVolumeUsd: number;
+  swapXp: number;
+  lpValueUsd: number;
+  lpXp: number;
+  totalXp: number;
+}
+
+export interface XpAccrualHistoryResponse {
+  total: number;
+  page: number;
+  limit: number;
+  data: XpAccrualHistoryEntry[];
+}
+
+export interface EpochHistoryEntry {
+  epoch: number;
+  start: string;
+  end: string;
+  multiplier: number;
+  swapXpPerUsd: number;
+  lpXpPerUsd: number;
+  isCurrent: boolean;
+}
+
+export interface LeaderboardEpochResponse {
+  currentEpoch: number;
+  currentEpochStart: string;
+  nextEpochStart: string;
+  msUntilNextEpoch: number;
+  currentMultiplier: number;
+  baseRates: {
+    swapXpPerUsd: number;
+    lpXpPerUsd: number;
+  };
+  currentRates: {
+    swapXpPerUsd: number;
+    lpXpPerUsd: number;
+  };
+  epochs: EpochHistoryEntry[];
 }
 
 /**
@@ -167,6 +208,24 @@ export class CubeBackendClient {
     return this.getDataField<LeaderboardUserStats>(
       `/api/leaderboard/user/${encodeURIComponent(address)}`,
     );
+  }
+
+  getLeaderboardUserHistory(
+    address: string,
+    page: number = 1,
+    limit: number = 50,
+  ): Promise<SdkResult<XpAccrualHistoryResponse>> {
+    const qs = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    return this.get<XpAccrualHistoryResponse>(
+      `/api/leaderboard/user/${encodeURIComponent(address)}/history?${qs.toString()}`,
+    );
+  }
+
+  getLeaderboardEpoch(): Promise<SdkResult<LeaderboardEpochResponse>> {
+    return this.get<LeaderboardEpochResponse>("/api/leaderboard/epoch");
   }
 
   getTokenPrices(mints: string[]): Promise<SdkResult<PriceMap>> {
