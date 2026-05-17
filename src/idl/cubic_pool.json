@@ -565,6 +565,66 @@
       ]
     },
     {
+      "name": "range_manager_update",
+      "docs": [
+        "Tweak any subset of `virtual_balances` and / or `normalized_weights`",
+        "within the configured envelope. Range-manager only.",
+        "",
+        "# Parameters",
+        "* `vb_changes`     — sparse `[(index, new_vb)]`; may be empty.",
+        "* `weight_changes` — sparse `[(index, new_weight_bps)]`; may be",
+        "empty. The resulting weight vector must sum to `WEIGHT_SCALE`",
+        "and stay within `[MIN_WEIGHT, MAX_WEIGHT]` per token, otherwise",
+        "the whole instruction reverts."
+      ],
+      "discriminator": [
+        245,
+        183,
+        35,
+        69,
+        200,
+        10,
+        172,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "docs": [
+            "Mutated — handler writes new virtual_balances / normalized_weights",
+            "and bumps `range_manager_last_updated`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "vb_changes",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "TokenChange"
+              }
+            }
+          }
+        },
+        {
+          "name": "weight_changes",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "TokenChange"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "remove_liquidity",
       "docs": [
         "Burn BPT proportionally and pay out tokens.",
@@ -750,6 +810,98 @@
         {
           "name": "protocol_fee_rate",
           "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_range_manager",
+      "docs": [
+        "Set or disable the range-manager pubkey on `pool`. Pool-admin only —",
+        "protocol-admin cannot reach this. Combine `new_manager =",
+        "Pubkey::default()` with `enabled = false` for the fully-disabled",
+        "state. New pools deploy with this off by default.",
+        "",
+        "# Parameters",
+        "* `new_manager` — pubkey allowed to call `range_manager_update`.",
+        "* `enabled`     — gate flag; `false` blocks the manager even if",
+        "pubkey is set."
+      ],
+      "discriminator": [
+        103,
+        102,
+        173,
+        112,
+        8,
+        2,
+        37,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_manager",
+          "type": "pubkey"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_range_manager_config",
+      "docs": [
+        "Configure the envelope the range-manager must stay within. Pool-",
+        "admin only. Limits are per-token (applied independently in the",
+        "update loop) and basis points of the CURRENT value.",
+        "",
+        "# Parameters",
+        "* `max_vb_change_bps`        — ≤ 10_000. 5% = 500.",
+        "* `max_weight_change_bps`    — ≤ 10_000.",
+        "* `min_update_interval_secs` — rate-limit between successive",
+        "`range_manager_update` calls."
+      ],
+      "discriminator": [
+        103,
+        211,
+        0,
+        200,
+        164,
+        189,
+        245,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "max_vb_change_bps",
+          "type": "u16"
+        },
+        {
+          "name": "max_weight_change_bps",
+          "type": "u16"
+        },
+        {
+          "name": "min_update_interval_secs",
+          "type": "u32"
         }
       ]
     },
@@ -1243,6 +1395,45 @@
       ]
     },
     {
+      "name": "RangeManagerConfigSet",
+      "discriminator": [
+        187,
+        59,
+        98,
+        47,
+        108,
+        2,
+        229,
+        152
+      ]
+    },
+    {
+      "name": "RangeManagerSet",
+      "discriminator": [
+        62,
+        152,
+        235,
+        91,
+        195,
+        238,
+        83,
+        202
+      ]
+    },
+    {
+      "name": "RangeManagerUpdated",
+      "discriminator": [
+        132,
+        144,
+        100,
+        144,
+        149,
+        205,
+        212,
+        24
+      ]
+    },
+    {
       "name": "Swap",
       "discriminator": [
         81,
@@ -1477,6 +1668,51 @@
       "code": 6038,
       "name": "ProtocolAdminNotTreasury",
       "msg": "protocol_admin must equal the hardcoded Treasury PDA"
+    },
+    {
+      "code": 6039,
+      "name": "RangeManagerDisabled",
+      "msg": "Range manager is not enabled for this pool"
+    },
+    {
+      "code": 6040,
+      "name": "RangeManagerUnauthorized",
+      "msg": "Signer is not the configured range manager"
+    },
+    {
+      "code": 6041,
+      "name": "RangeManagerUpdateTooFrequent",
+      "msg": "Range manager update too frequent — minimum interval not yet elapsed"
+    },
+    {
+      "code": 6042,
+      "name": "RangeManagerVbChangeTooLarge",
+      "msg": "Range manager virtual balance change exceeds configured bps cap"
+    },
+    {
+      "code": 6043,
+      "name": "RangeManagerWeightChangeTooLarge",
+      "msg": "Range manager weight change exceeds configured bps cap"
+    },
+    {
+      "code": 6044,
+      "name": "RangeManagerEmptyUpdate",
+      "msg": "Range manager update must change at least one virtual balance or weight"
+    },
+    {
+      "code": 6045,
+      "name": "RangeManagerInvalidBps",
+      "msg": "Range manager bps parameter exceeds 10000"
+    },
+    {
+      "code": 6046,
+      "name": "RangeManagerWeightSumInvalid",
+      "msg": "Resulting weights do not sum to WEIGHT_SCALE after range manager update"
+    },
+    {
+      "code": 6047,
+      "name": "RangeManagerDuplicateIndex",
+      "msg": "Duplicate token index in range manager update"
     }
   ],
   "types": [
@@ -1708,14 +1944,65 @@
             "type": "pubkey"
           },
           {
+            "name": "range_manager",
+            "docs": [
+              "Pubkey allowed to call `range_manager_update`. `Pubkey::default()`",
+              "⇒ no manager set. Pool-admin only; protocol-admin cannot touch this."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "range_manager_enabled",
+            "docs": [
+              "`false` ⇒ all `range_manager_update` calls revert with",
+              "`RangeManagerDisabled` even if the signer matches `range_manager`."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "range_manager_max_vb_change_bps",
+            "docs": [
+              "Maximum % change (basis points of current value) of any single",
+              "virtual balance per `range_manager_update` call. Applied",
+              "per-token in a loop. Set by pool-admin."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "range_manager_max_weight_change_bps",
+            "docs": [
+              "Maximum % change (basis points of current value) of any single",
+              "normalized weight per call. Same per-token check semantics."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "range_manager_min_update_interval_secs",
+            "docs": [
+              "Minimum seconds between successive `range_manager_update` calls.",
+              "`now - last_updated < min_interval` ⇒ `RangeManagerUpdateTooFrequent`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "range_manager_last_updated",
+            "docs": [
+              "`Clock::unix_timestamp` of the last successful update. Bumped by",
+              "the program; admin / manager don't set this directly."
+            ],
+            "type": "i64"
+          },
+          {
             "name": "reserved",
             "docs": [
-              "Forward-compat padding (do not repurpose without a migration plan)."
+              "Forward-compat padding (do not repurpose without a migration plan).",
+              "Shrunk from 64 → 15 bytes to make room for the range-manager block",
+              "above. Total storage size unchanged."
             ],
             "type": {
               "array": [
                 "u8",
-                64
+                15
               ]
             }
           }
@@ -2394,6 +2681,124 @@
       }
     },
     {
+      "name": "RangeManagerConfigSet",
+      "docs": [
+        "Emitted by `set_range_manager_config`. Carries the full effective",
+        "envelope so off-chain indexers don't need to re-fetch the pool."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_vb_change_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_weight_change_bps",
+            "type": "u16"
+          },
+          {
+            "name": "min_update_interval_secs",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RangeManagerSet",
+      "docs": [
+        "Emitted by `set_range_manager`. Both the pubkey and the enabled flag",
+        "are bundled into a single event. `new_manager == Pubkey::default()`",
+        "AND `enabled = false` is the \"fully disabled\" state."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RangeManagerUpdated",
+      "docs": [
+        "Emitted by `range_manager_update` after every check passes and state",
+        "is committed. `vb_indices` / `vb_new_values` and `weight_indices` /",
+        "`weight_new_values` are aligned slices (may be empty)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "vb_indices",
+            "type": "bytes"
+          },
+          {
+            "name": "vb_new_values",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "weight_indices",
+            "type": "bytes"
+          },
+          {
+            "name": "weight_new_values",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Swap",
       "docs": [
         "Emitted by `swap` after the trade executes.",
@@ -2505,6 +2910,26 @@
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenChange",
+      "docs": [
+        "Single (token_index, new_value) entry. Used by both the",
+        "virtual-balance and weight change lists."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u8"
+          },
+          {
+            "name": "new_value",
+            "type": "u64"
           }
         ]
       }

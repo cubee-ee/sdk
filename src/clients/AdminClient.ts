@@ -223,6 +223,60 @@ export class AdminClient {
       .instruction();
   }
 
+  // ── Supervisor (limited circuit-breaker) ─────────────────────────────────
+
+  /**
+   * Set or revoke the Treasury `supervisor` pubkey. Admin-only.
+   *
+   * Passing `PublicKey.default` revokes the role. On first call after a v1→v2
+   * upgrade, the underlying ix triggers a Treasury account realloc 786→818
+   * (admin pays the rent diff).
+   */
+  setSupervisorIx(admin: PublicKey, newSupervisor: PublicKey) {
+    return (this.program.methods as any)
+      .setSupervisor(newSupervisor)
+      .accounts({
+        treasury: this.treasuryPda,
+        admin,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+  }
+
+  /**
+   * Batch-freeze the given pools — equivalent to calling
+   * `cubic_pool.set_pool_enabled(false)` per pool via Treasury-signed CPI.
+   * Authorized for `treasury.admin` OR `treasury.supervisor` (when set).
+   *
+   * `configs[i]` must be the `CubicPoolConfig` that owns `pools[i]`.
+   */
+  freezePoolsIx(authority: PublicKey, configs: PublicKey[], pools: PublicKey[]) {
+    const remaining = this.pairRemaining(configs, pools);
+    return (this.program.methods as any)
+      .freezePools()
+      .accounts({
+        treasury: this.treasuryPda,
+        authority,
+        cubicPoolProgram: this.cubicPoolProgramId,
+      })
+      .remainingAccounts(remaining)
+      .instruction();
+  }
+
+  /** Mirror of `freezePoolsIx` with `enabled = true`. */
+  unfreezePoolsIx(authority: PublicKey, configs: PublicKey[], pools: PublicKey[]) {
+    const remaining = this.pairRemaining(configs, pools);
+    return (this.program.methods as any)
+      .unfreezePools()
+      .accounts({
+        treasury: this.treasuryPda,
+        authority,
+        cubicPoolProgram: this.cubicPoolProgramId,
+      })
+      .remainingAccounts(remaining)
+      .instruction();
+  }
+
   // ── Internals ────────────────────────────────────────────────────────────
 
   private poolAdminAccounts(admin: PublicKey, config: PublicKey, pool: PublicKey) {
@@ -248,6 +302,21 @@ export class AdminClient {
       acc.push({ pubkey: vaults[i], isSigner: false, isWritable: true });
       acc.push({ pubkey: recipients[i], isSigner: false, isWritable: true });
       acc.push({ pubkey: tokenPrograms[i], isSigner: false, isWritable: false });
+    }
+    return acc;
+  }
+
+  private pairRemaining(configs: PublicKey[], pools: PublicKey[]): AccountMeta[] {
+    if (configs.length !== pools.length) {
+      throw new Error("AdminClient: configs.length must equal pools.length");
+    }
+    if (configs.length === 0) {
+      throw new Error("AdminClient: at least one [config, pool] pair required");
+    }
+    const acc: AccountMeta[] = [];
+    for (let i = 0; i < configs.length; i++) {
+      acc.push({ pubkey: configs[i], isSigner: false, isWritable: false });
+      acc.push({ pubkey: pools[i], isSigner: false, isWritable: true });
     }
     return acc;
   }
