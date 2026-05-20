@@ -406,12 +406,25 @@ export class CubicPoolClient {
     const poolRes = this.requireCache();
     if (!poolRes.ok) return poolRes;
     const slip = params.slippageHundredthsBps ?? this.config.defaults.slippageHundredthsBps;
-    const minOut = params.minAmountOut
-      ? params.minAmountOut
-      : (() => {
-          const q = this.quoteSwap(params.tokenInIndex, params.tokenOutIndex, params.amountIn, slip);
-          return q.ok ? q.data.minAmountOut : new BN(0);
-        })();
+    let minOut: BN;
+    if (params.minAmountOut) {
+      minOut = params.minAmountOut;
+    } else {
+      const q = this.quoteSwap(
+        params.tokenInIndex,
+        params.tokenOutIndex,
+        params.amountIn,
+        slip
+      );
+      if (!q.ok) {
+        return err(
+          q.error.code,
+          `Cannot build swap without minAmountOut: ${q.error.humanMessage}`,
+          q.error.cause
+        );
+      }
+      minOut = q.data.minAmountOut;
+    }
     try {
       const tx = buildSwapTx(this.config, poolRes.data, { ...params, minAmountOut: minOut });
       return ok(tx);
