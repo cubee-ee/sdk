@@ -23,7 +23,11 @@
   },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/cubee-ee/sdk.git"
+  },
+  "homepage": "https://github.com/cubee-ee/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/cubee-ee/sdk/issues"
   },
   "keywords": [
     "solana",
