@@ -6,9 +6,13 @@ import {
   buildAddLiquidityTx,
   buildDeployPoolTx,
   buildInitializeConfigIx,
+  buildInitializePoolAltIx,
+  buildInitializePoolAltTx,
   buildRemoveLiquidityTx,
   buildSwapTx,
+  deriveAltAddress,
 } from "../src/clients/tx-builders";
+import { AddressLookupTableProgram } from "@solana/web3.js";
 import cubicPoolIdl from "../src/idl/cubic_pool.json";
 import { PoolInfo } from "../src/types/pool";
 
@@ -46,6 +50,7 @@ function mockPool(tokenCount = 2): PoolInfo {
     poolEnabled: true,
     swapsEnabled: true,
     createdAt: 0,
+    lookupTable: PublicKey.default,
     syncedAt: Date.now(),
   };
 }
@@ -131,5 +136,60 @@ describe("tx-builders discriminators", () => {
     expect(remove.data.subarray(0, 8).toString("hex")).toBe(idlDiscriminator("remove_liquidity"));
     expect(deploy.data.subarray(0, 8).toString("hex")).toBe(idlDiscriminator("initialize_cubic_pool"));
     expect(initConfig.data.subarray(0, 8).toString("hex")).toBe(idlDiscriminator("initialize_config"));
+  });
+});
+
+describe("tx-builders.initializePoolAlt", () => {
+  test("derives the ALT address from (authority, slot) matching the upstream PDA scheme", () => {
+    const auth = pk();
+    const slot = new BN(123_456_789);
+
+    const slotBuf = Buffer.alloc(8);
+    slotBuf.writeBigUInt64LE(BigInt(slot.toString()));
+    const [expected] = PublicKey.findProgramAddressSync(
+      [auth.toBuffer(), slotBuf],
+      AddressLookupTableProgram.programId,
+    );
+
+    expect(deriveAltAddress(auth, slot).toBase58()).toBe(expected.toBase58());
+  });
+
+  test("emits canonical discriminator + recent_slot little-endian as ix data", () => {
+    const cfg = getConfig("devnet");
+    const auth = pk();
+    const slot = new BN("999000111222");
+
+    const ix = buildInitializePoolAltIx(cfg, {
+      pool: pk(),
+      authority: auth,
+      recentSlot: slot,
+    });
+
+    expect(ix.programId.toBase58()).toBe(cfg.programs.cubicPool.toBase58());
+    expect(ix.data.length).toBe(8 + 8);
+    expect(ix.data.subarray(0, 8).toString("hex")).toBe(
+      idlDiscriminator("initialize_pool_alt"),
+    );
+    // Last 8 bytes = u64 LE of recent_slot
+    const decoded = new BN(ix.data.subarray(8, 16), "le").toString();
+    expect(decoded).toBe(slot.toString());
+  });
+
+  test("buildTx prepends a ComputeBudget ix and exposes the lookup_table address", () => {
+    const cfg = getConfig("devnet");
+    const auth = pk();
+    const slot = new BN(42);
+
+    const built = buildInitializePoolAltTx(cfg, {
+      pool: pk(),
+      authority: auth,
+      recentSlot: slot,
+    });
+
+    expect(built.instructions).toHaveLength(2);
+    expect(built.instructions[0].programId.toBase58()).toBe(
+      ComputeBudgetProgram.programId.toBase58(),
+    );
+    expect(built.lookupTable.toBase58()).toBe(deriveAltAddress(auth, slot).toBase58());
   });
 });

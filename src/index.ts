@@ -97,7 +97,12 @@ export {
   buildInitializeConfigIx,
   buildInitializeCubicPoolIx,
   buildDeployPoolTx,
+  buildInitializePoolAltIx,
+  buildInitializePoolAltTx,
+  deriveAltAddress,
 } from "./clients/tx-builders";
+export { buildVersionedTx, compileBuiltTx } from "./clients/versioned";
+export type { InitializePoolAltParams } from "./clients/tx-builders";
 export { decodePoolAccount, POOL_DISCRIMINATOR_LEN } from "./parsers/poolAccount";
 export { decodeMintAccount } from "./parsers/mintAccount";
 export { parseCubicPoolEvents } from "./parsers/events";

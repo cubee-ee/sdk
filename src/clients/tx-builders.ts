@@ -1,5 +1,6 @@
 import {
   AccountMeta,
+  AddressLookupTableProgram,
   ComputeBudgetProgram,
   PublicKey,
   SystemProgram,
@@ -34,6 +35,7 @@ const CUBIC_POOL_DISC = {
   addLiquidity: computeDiscriminator("add_liquidity"),
   removeLiquidity: computeDiscriminator("remove_liquidity"),
   initializeCubicPool: computeDiscriminator("initialize_cubic_pool"),
+  initializePoolAlt: computeDiscriminator("initialize_pool_alt"),
 };
 
 const STLD_DISC = {
@@ -62,6 +64,7 @@ function computeDiscriminator(ixName: string): Buffer {
     add_liquidity: "b59d59438fb63448",
     remove_liquidity: "5055d14818ceb16c",
     initialize_cubic_pool: "d79474cf79686f83",
+    initialize_pool_alt: "fb874202f4490c90",
     deposit_single_token: "a688a62fc7c056a9",
     initialize_config: "d07f1501c2bec446",
   };
@@ -501,6 +504,89 @@ export function buildDeployPoolTx(cfg: CubeConfig, params: DeployPoolParams): Bu
       buildInitializeCubicPoolIx(cfg, params),
     ],
     suggestedCuLimit: 400_000,
+  };
+}
+
+// ============================================================
+// initialize_pool_alt — per-pool Address Lookup Table
+// ============================================================
+
+export interface InitializePoolAltParams {
+  /** Pool PDA. */
+  pool: PublicKey;
+  /** Pool admin signer. Pays for the ALT account rent. */
+  authority: PublicKey;
+  /**
+   * Recent slot. Used by the upstream ALT program to derive the table
+   * address as `[authority, recent_slot]`. Must be a slot the runtime
+   * still has in slot-hashes — caller should pass
+   * `await connection.getSlot('finalized')`.
+   */
+  recentSlot: BN;
+}
+
+/**
+ * Re-derives the Address Lookup Table address from `(authority, recent_slot)`
+ * the same way the upstream ALT program does.
+ *
+ * `@solana/web3.js` v1 doesn't expose `deriveLookupTableAddress` as a static,
+ * so we inline the seed derivation.
+ */
+export function deriveAltAddress(authority: PublicKey, recentSlot: BN): PublicKey {
+  const slotBuf = recentSlot.toArrayLike(Buffer, "le", 8);
+  const [addr] = PublicKey.findProgramAddressSync(
+    [authority.toBuffer(), slotBuf],
+    AddressLookupTableProgram.programId,
+  );
+  return addr;
+}
+
+/**
+ * Build the on-chain `initialize_pool_alt` instruction. Performs three
+ * upstream CPIs inside the program: create + extend + freeze. After
+ * this ix lands, the ALT is immutable and the pool's `lookup_table`
+ * field points at it.
+ *
+ * Caller must NOT use the ALT in the same slot (warmup) — wait at
+ * least one slot before sending any v0 tx that references it.
+ */
+export function buildInitializePoolAltIx(
+  cfg: CubeConfig,
+  params: InitializePoolAltParams,
+): TransactionInstruction {
+  const altAddr = deriveAltAddress(params.authority, params.recentSlot);
+
+  const data = Buffer.concat([
+    CUBIC_POOL_DISC.initializePoolAlt,
+    encodeU64(params.recentSlot),
+  ]);
+
+  const keys: AccountMeta[] = [
+    { pubkey: params.pool, isSigner: false, isWritable: true },
+    { pubkey: params.authority, isSigner: true, isWritable: true },
+    { pubkey: altAddr, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: AddressLookupTableProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({
+    programId: cfg.programs.cubicPool,
+    keys,
+    data,
+  });
+}
+
+export function buildInitializePoolAltTx(
+  cfg: CubeConfig,
+  params: InitializePoolAltParams,
+): BuiltTx & { lookupTable: PublicKey } {
+  return {
+    instructions: [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+      buildInitializePoolAltIx(cfg, params),
+    ],
+    suggestedCuLimit: 200_000,
+    lookupTable: deriveAltAddress(params.authority, params.recentSlot),
   };
 }
 
