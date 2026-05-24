@@ -164,6 +164,8 @@ export type {
   XpAccrualHistoryResponse,
   EpochHistoryEntry,
   LeaderboardEpochResponse,
+  SwapRouteEntry,
+  SwapRouteResponse,
   CubicPoolClientParams,
   SingleTokenDepositClientParams,
   PoolFactoryClientParams,

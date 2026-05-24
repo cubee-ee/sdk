@@ -36,6 +36,34 @@ export interface PriceMap {
   [mint: string]: number;
 }
 
+// ── Swap route types ──
+
+export interface SwapRouteEntry {
+  poolAddress: string;
+  poolName: string;
+  amountIn: string;
+  expectedOut: string;
+  percentage: number;
+  swapFee: number;
+  tokenProgramIn: string;
+  tokenProgramOut: string;
+  tokenInIndex: number;
+  tokenOutIndex: number;
+  vaultIn: string | null;
+  vaultOut: string | null;
+}
+
+export interface SwapRouteResponse {
+  routes: SwapRouteEntry[];
+  totalAmountIn: string;
+  totalExpectedOut: string;
+  effectivePrice: number;
+  priceImpact: number;
+  spotPrice: number;
+  /** Estimated XP earned from this swap (based on LP fees generated) */
+  estimatedXp: number;
+}
+
 // ── Leaderboard types ──
 
 export interface LeaderboardEntry {
@@ -81,7 +109,7 @@ export interface EpochHistoryEntry {
   start: string;
   end: string;
   multiplier: number;
-  swapXpPerUsd: number;
+  swapXpPerUsdLpFee: number;
   lpXpPerUsd: number;
   isCurrent: boolean;
 }
@@ -93,11 +121,11 @@ export interface LeaderboardEpochResponse {
   msUntilNextEpoch: number;
   currentMultiplier: number;
   baseRates: {
-    swapXpPerUsd: number;
+    swapXpPerUsdLpFee: number;
     lpXpPerUsd: number;
   };
   currentRates: {
-    swapXpPerUsd: number;
+    swapXpPerUsdLpFee: number;
     lpXpPerUsd: number;
   };
   epochs: EpochHistoryEntry[];
@@ -180,13 +208,21 @@ export class CubeBackendClient {
     return this.getDataField<T>(`/api/pools/${addr}/transactions?${qs.toString()}`);
   }
 
-  getSwapRoute<T>(
+  getSwapRoute(
     tokenIn: string,
     tokenOut: string,
-    amountIn: string
-  ): Promise<SdkResult<T>> {
-    const qs = new URLSearchParams({ tokenIn, tokenOut, amountIn });
-    return this.getDataField<T>(`/api/swap/route?${qs.toString()}`);
+    amountIn: string,
+    decimalsIn: number = 9,
+  ): Promise<SdkResult<SwapRouteResponse>> {
+    const qs = new URLSearchParams({
+      tokenIn,
+      tokenOut,
+      amountIn,
+      decimalsIn: String(decimalsIn),
+    });
+    return this.getDataField<SwapRouteResponse>(
+      `/api/pools/swap-route?${qs.toString()}`,
+    );
   }
 
   // ── Leaderboard ──
