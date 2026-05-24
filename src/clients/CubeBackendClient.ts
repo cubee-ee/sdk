@@ -109,7 +109,7 @@ export interface EpochHistoryEntry {
   start: string;
   end: string;
   multiplier: number;
-  swapXpPerUsd: number;
+  swapXpPerUsdLpFee: number;
   lpXpPerUsd: number;
   isCurrent: boolean;
 }
@@ -121,11 +121,11 @@ export interface LeaderboardEpochResponse {
   msUntilNextEpoch: number;
   currentMultiplier: number;
   baseRates: {
-    swapXpPerUsd: number;
+    swapXpPerUsdLpFee: number;
     lpXpPerUsd: number;
   };
   currentRates: {
-    swapXpPerUsd: number;
+    swapXpPerUsdLpFee: number;
     lpXpPerUsd: number;
   };
   epochs: EpochHistoryEntry[];
