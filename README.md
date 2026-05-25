@@ -105,6 +105,56 @@ throws for I/O or parse errors.
 
 **In the frontend:** only UI rendering + state management (zustand / redux) + wallet integration. No raw RPC calls, no borsh, no math.
 
+## v0 transactions + per-pool ALT
+
+Multi-token pools (especially 7–10 token ones) exceed Solana's 1232-byte
+legacy transaction wire ceiling on `add_liquidity` /
+`remove_liquidity`. The contract provisions an **Address Lookup Table
+(ALT) per pool** via `initialize_pool_alt`. After init the ALT is
+frozen and its address is recorded on `pool.lookup_table`.
+
+The SDK's `buildAddLiquidityTx` / `buildRemoveLiquidityTx` automatically
+wrap their instructions in a `VersionedTransaction` (v0) referencing
+the pool's frozen ALT when `pool.lookupTable` is set, transparently
+fitting 10-token operations under the wire ceiling.
+
+```ts
+const { instructions, lookupTables } = client.buildRemoveLiquidityTx({...});
+// `lookupTables` is `[pool.lookupTable]` when set — feed it straight
+// into `TransactionMessage.compileToV0Message(payer, lookupTables)`.
+```
+
+### Provisioning an ALT for a new pool
+
+```ts
+import { buildInitializePoolAltTx } from "@cubee_ee/sdk";
+
+const recentSlot = new BN(await connection.getSlot("finalized"));
+const { instructions, lookupTable } = buildInitializePoolAltTx(config, {
+  pool: poolPubkey,
+  config: poolConfigPubkey,    // from pool.config — required
+  authority: poolAdmin,         // pool admin OR config.protocol_admin
+  payer: poolAdmin,             // pays ~0.005 SOL ALT rent (locked)
+  recentSlot,
+});
+// Sign + send. After landing, pool.lookup_table === lookupTable.
+```
+
+**Account fields:**
+- `pool` — `CubicPool` account
+- `config` — the `CubicPoolConfig` the pool is pinned to (read for the
+  alternative-authority check). Always required.
+- `authority` — signs the create+extend+freeze CPIs. Either
+  `pool.pool_admin` or `config.protocol_admin` (Treasury PDA, only
+  reachable via `protocol_admin.pool_initialize_alt`). ALT pubkey is
+  derived from `[authority, recent_slot]`.
+- `payer` — pays ALT rent. Decoupled from `authority` because
+  Treasury PDA can't be a `system_program::transfer` source (carries
+  data). For the pool-admin path, pass the same key as `authority`.
+
+ALT rent for a typical 4-token pool is ~0.0044 SOL; a 10-token pool
+~0.0071 SOL. Permanently locked (frozen ALT can't be closed).
+
 ## Token-2022 support
 
 Pools may mix the classic SPL Token program and Token-2022. Every
