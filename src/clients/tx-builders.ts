@@ -514,8 +514,18 @@ export function buildDeployPoolTx(cfg: CubeConfig, params: DeployPoolParams): Bu
 export interface InitializePoolAltParams {
   /** Pool PDA. */
   pool: PublicKey;
-  /** Pool admin signer. Pays for the ALT account rent. */
+  /** `CubicPoolConfig` account this pool is pinned to. Read by the
+   *  program to gate the alternative-authority path (`config.protocol_admin`). */
+  config: PublicKey;
+  /** Authority. Must equal either `pool.pool_admin` (per-pool owner
+   *  path) or `config.protocol_admin` (Treasury PDA via the
+   *  protocol-admin CPI wrapper). The ALT address is derived from
+   *  `[authority, recent_slot]`. */
   authority: PublicKey;
+  /** Rent payer. Decoupled from `authority` so the wrapper path can
+   *  pay from a regular wallet while Treasury PDA acts as authority.
+   *  In the pool-admin path pass the same key for both. */
+  payer: PublicKey;
   /**
    * Recent slot. Used by the upstream ALT program to derive the table
    * address as `[authority, recent_slot]`. Must be a slot the runtime
@@ -561,9 +571,13 @@ export function buildInitializePoolAltIx(
     encodeU64(params.recentSlot),
   ]);
 
+  // Account order MUST match cubic-pool's InitializePoolAlt context:
+  //   pool, config, authority, payer, lookup_table, system_program, alt_program.
   const keys: AccountMeta[] = [
     { pubkey: params.pool, isSigner: false, isWritable: true },
-    { pubkey: params.authority, isSigner: true, isWritable: true },
+    { pubkey: params.config, isSigner: false, isWritable: false },
+    { pubkey: params.authority, isSigner: true, isWritable: false },
+    { pubkey: params.payer, isSigner: true, isWritable: true },
     { pubkey: altAddr, isSigner: false, isWritable: true },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: AddressLookupTableProgram.programId, isSigner: false, isWritable: false },

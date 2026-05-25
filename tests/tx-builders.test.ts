@@ -161,7 +161,9 @@ describe("tx-builders.initializePoolAlt", () => {
 
     const ix = buildInitializePoolAltIx(cfg, {
       pool: pk(),
+      config: pk(),
       authority: auth,
+      payer: auth,
       recentSlot: slot,
     });
 
@@ -182,7 +184,9 @@ describe("tx-builders.initializePoolAlt", () => {
 
     const built = buildInitializePoolAltTx(cfg, {
       pool: pk(),
+      config: pk(),
       authority: auth,
+      payer: auth,
       recentSlot: slot,
     });
 

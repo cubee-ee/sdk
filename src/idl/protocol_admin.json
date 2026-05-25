@@ -139,6 +139,50 @@
       "args": []
     },
     {
+      "name": "freeze_pools",
+      "docs": [
+        "Batch-freeze pools — pause swaps + add/remove liquidity on every",
+        "`[config_i, pool_i]` pair passed via `remaining_accounts`. CPIs",
+        "`cubic_pool::set_pool_enabled(false)` per pair, signed by the",
+        "Treasury PDA.",
+        "",
+        "# Authority",
+        "`treasury.admin` OR `treasury.supervisor` (when set)."
+      ],
+      "discriminator": [
+        145,
+        66,
+        173,
+        210,
+        162,
+        200,
+        248,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury PDA (signs the cubic-pool CPI). Read-only here; the",
+            "CPI uses `treasury.to_account_info()` with `invoke_signed`",
+            "seeds, so this account doesn't need `mut`."
+          ]
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Either `treasury.admin` or `treasury.supervisor` — handler",
+            "enforces."
+          ],
+          "signer": true
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize",
       "docs": [
         "Create the Treasury PDA. Singleton — runs once at deploy time."
@@ -350,6 +394,67 @@
       ]
     },
     {
+      "name": "pool_initialize_alt",
+      "docs": [
+        "Operator-driven per-pool ALT provisioning. Treasury PDA signs",
+        "the CPI to `cubic_pool::initialize_pool_alt`. ALT account",
+        "address is derived from `[Treasury PDA, recent_slot]`. `admin`",
+        "pays ALT rent (~0.005 SOL).",
+        "",
+        "# Authority",
+        "`treasury.admin` only."
+      ],
+      "discriminator": [
+        252,
+        45,
+        53,
+        31,
+        10,
+        50,
+        82,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "lookup_table",
+          "docs": [
+            "address `[Treasury PDA, recent_slot]`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "alt_program"
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "recent_slot",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "pool_initialize_config",
       "discriminator": [
         208,
@@ -430,6 +535,75 @@
           "type": "pubkey"
         }
       ]
+    },
+    {
+      "name": "pool_migrate_v4",
+      "docs": [
+        "Operator-driven v3 → v4 pool storage migration. Treasury PDA",
+        "signs the CPI to `cubic_pool::migrate_pool_v4`; cubic-pool",
+        "accepts `config.protocol_admin` as authority in addition to",
+        "`pool.pool_admin`. `admin` pays the rent diff for the realloc.",
+        "",
+        "# Authority",
+        "`treasury.admin` only — supervisor cannot trigger storage",
+        "migrations."
+      ],
+      "discriminator": [
+        159,
+        77,
+        21,
+        158,
+        41,
+        172,
+        31,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury PDA — signs the cubic-pool CPI via `signer_seeds`.",
+            "Marked `mut` because cubic-pool's `MigratePoolV4` declares",
+            "`authority: #[account(mut)]` (it conditionally transfers from",
+            "authority for the realloc rent top-up). Anchor's CPI machinery",
+            "requires the outer writability flag to match the inner one even",
+            "when no actual write happens (in our flow the transfer is a",
+            "no-op because we pre-fund the pool directly from `admin`).",
+            "Without `mut` here the runtime reports \"writable privilege",
+            "escalated\"."
+          ],
+          "writable": true
+        },
+        {
+          "name": "admin",
+          "docs": [
+            "Operator — pays both tx fees and the rent diff."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "(owner = cubic-pool, size = `LEN_V3`, discriminator matches)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "and reads `protocol_admin` from its raw bytes to gate the",
+            "alternative-authority path."
+          ]
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": []
     },
     {
       "name": "pool_set_banned_extensions",
@@ -667,6 +841,58 @@
       "args": []
     },
     {
+      "name": "set_supervisor",
+      "docs": [
+        "Set or revoke the `supervisor` pubkey on Treasury.",
+        "",
+        "Supervisor can call ONLY `freeze_pools` and `unfreeze_pools` —",
+        "nothing else. Single-step: admin sets it directly, no claim flow.",
+        "Pass `Pubkey::default()` to revoke.",
+        "",
+        "# Authority",
+        "`treasury.admin` only.",
+        "",
+        "# Migration side-effect",
+        "First call after the v2 upgrade reallocs the Treasury account",
+        "from 786 → 818 bytes (admin pays the rent diff). Subsequent",
+        "calls are no-op on size."
+      ],
+      "discriminator": [
+        45,
+        205,
+        198,
+        102,
+        110,
+        132,
+        55,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "docs": [
+            "and write below. The PDA seed constraint guarantees this is the",
+            "Treasury — but its on-chain size may be v1 (786) or v2 (818)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_supervisor",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "stld_withdraw_sol",
       "discriminator": [
         200,
@@ -751,6 +977,49 @@
           "type": "pubkey"
         }
       ]
+    },
+    {
+      "name": "unfreeze_pools",
+      "docs": [
+        "Batch-unfreeze pools — re-enable operations on every",
+        "`[config_i, pool_i]` pair passed via `remaining_accounts`.",
+        "Mirror of `freeze_pools`.",
+        "",
+        "# Authority",
+        "`treasury.admin` OR `treasury.supervisor` (when set)."
+      ],
+      "discriminator": [
+        19,
+        205,
+        34,
+        128,
+        205,
+        228,
+        105,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury PDA (signs the cubic-pool CPI). Read-only here; the",
+            "CPI uses `treasury.to_account_info()` with `invoke_signed`",
+            "seeds, so this account doesn't need `mut`."
+          ]
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Either `treasury.admin` or `treasury.supervisor` — handler",
+            "enforces."
+          ],
+          "signer": true
+        },
+        {
+          "name": "cubic_pool_program"
+        }
+      ],
+      "args": []
     },
     {
       "name": "upgrade_pool_program",
@@ -951,6 +1220,19 @@
       ]
     },
     {
+      "name": "PoolAltInitializedByTreasury",
+      "discriminator": [
+        49,
+        149,
+        148,
+        98,
+        223,
+        127,
+        132,
+        111
+      ]
+    },
+    {
       "name": "PoolBannedExtensionsSet",
       "discriminator": [
         39,
@@ -1013,6 +1295,19 @@
         152,
         57,
         242
+      ]
+    },
+    {
+      "name": "PoolMigratedV4ByTreasury",
+      "discriminator": [
+        222,
+        163,
+        236,
+        129,
+        117,
+        208,
+        55,
+        12
       ]
     },
     {
@@ -1094,6 +1389,32 @@
       ]
     },
     {
+      "name": "PoolsFrozen",
+      "discriminator": [
+        113,
+        120,
+        15,
+        95,
+        223,
+        23,
+        172,
+        162
+      ]
+    },
+    {
+      "name": "PoolsUnfrozen",
+      "discriminator": [
+        124,
+        35,
+        103,
+        45,
+        1,
+        42,
+        62,
+        84
+      ]
+    },
+    {
       "name": "ProgramClosed",
       "discriminator": [
         3,
@@ -1156,6 +1477,19 @@
         147,
         79,
         80
+      ]
+    },
+    {
+      "name": "SupervisorSet",
+      "discriminator": [
+        250,
+        252,
+        67,
+        215,
+        142,
+        52,
+        106,
+        61
       ]
     },
     {
@@ -1238,6 +1572,11 @@
       "code": 6007,
       "name": "MathError",
       "msg": "Math error"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAccountLayout",
+      "msg": "Invalid remaining_accounts layout: expected non-empty [config, pool] pairs"
     }
   ],
   "types": [
@@ -1337,6 +1676,38 @@
           {
             "name": "amount",
             "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolAltInitializedByTreasury",
+      "docs": [
+        "Emitted when the operator provisions a per-pool ALT via",
+        "`pool_initialize_alt`. Counterpart to cubic_pools `PoolAltInitialized`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lookup_table",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
           },
           {
             "name": "timestamp",
@@ -1448,6 +1819,37 @@
           },
           {
             "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolMigratedV4ByTreasury",
+      "docs": [
+        "Emitted when the operator (`treasury.admin`) migrates a v3 pool to",
+        "v4 via `pool_migrate_v4`, bypassing the per-pool `pool_admin` path.",
+        "Distinguishable from `cubic_pool::PoolMigratedToV4` (which is also",
+        "emitted by the inner CPI) so observers can attribute operator-driven",
+        "migrations."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
             "type": "pubkey"
           },
           {
@@ -1602,6 +2004,63 @@
       }
     },
     {
+      "name": "PoolsFrozen",
+      "docs": [
+        "Emitted by `freeze_pools` after every per-pool CPI has succeeded.",
+        "`pool_count` matches the number of `[config, pool]` pairs the caller",
+        "passed via `remaining_accounts`. `authority` is the actual signer —",
+        "either `treasury.admin` or `treasury.supervisor`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_count",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolsUnfrozen",
+      "docs": [
+        "Emitted by `unfreeze_pools`. Mirrors `PoolsFrozen`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_count",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "ProgramClosed",
       "type": {
         "kind": "struct",
@@ -1726,6 +2185,38 @@
       }
     },
     {
+      "name": "SupervisorSet",
+      "docs": [
+        "Emitted by `set_supervisor`. `new_supervisor == Pubkey::default()`",
+        "means the role was revoked."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_supervisor",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_supervisor",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokenRegistered",
       "type": {
         "kind": "struct",
@@ -1757,8 +2248,16 @@
       "name": "Treasury",
       "docs": [
         "Singleton governance account at PDA `[b\"treasury\"]`. Holds the human",
-        "admin pubkey, a list of registered token mints + vault addresses, and",
-        "pending-admin state for the 2-step transfer flow."
+        "admin pubkey, a list of registered token mints + vault addresses,",
+        "pending-admin state for the 2-step transfer flow, and the limited",
+        "`supervisor` circuit-breaker pubkey.",
+        "",
+        "## Layout history",
+        "v1 (786 bytes): admin, pending_admin, bump, token_count, mints,",
+        "vaults, created_at, reserved[64].",
+        "v2 (818 bytes): same + `supervisor: Pubkey` appended at the end.",
+        "Existing v1 accounts are grown to v2 via the `realloc` constraint",
+        "on `set_supervisor`'s context (admin pays the lamport diff)."
       ],
       "type": {
         "kind": "struct",
@@ -1834,6 +2333,18 @@
                 64
               ]
             }
+          },
+          {
+            "name": "supervisor",
+            "docs": [
+              "Limited circuit-breaker pubkey. Allowed to call ONLY",
+              "`freeze_pools` and `unfreeze_pools`. Cannot transfer itself, has",
+              "no claim flow — admin sets it directly via `set_supervisor`.",
+              "`Pubkey::default()` ⇒ no supervisor; only admin can freeze.",
+              "Added in v2; reads as `Pubkey::default()` on un-migrated v1",
+              "accounts after `set_supervisor`'s realloc grows the account."
+            ],
+            "type": "pubkey"
           }
         ]
       }

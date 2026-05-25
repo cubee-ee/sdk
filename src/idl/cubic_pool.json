@@ -550,11 +550,32 @@
           "writable": true
         },
         {
+          "name": "config",
+          "docs": [
+            "`CubicPoolConfig` this pool inherits governance from. Pinned via",
+            "`pool.config`. Reading it lets the handler also accept",
+            "`config.protocol_admin` as an authority — which is the Treasury",
+            "PDA, only signable through `protocol_admin.pool_initialize_alt`."
+          ]
+        },
+        {
           "name": "authority",
           "docs": [
-            "Authority + payer. Must equal `pool.pool_admin` (re-using the",
-            "existing per-pool admin avoids inventing a new role). Pays both",
-            "the ALT rent and the per-extend rent top-ups."
+            "Authority. Must equal either `pool.pool_admin` (per-pool owner",
+            "path) or `config.protocol_admin` (Treasury PDA via the",
+            "protocol-admin CPI wrapper). Authorises the ALT creation; the",
+            "derived ALT address is `[authority, recent_slot]`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Payer for ALT rent + per-extend top-ups. Decoupled from",
+            "`authority` because Treasury PDA (the wrapper-path authority)",
+            "owns data and so cannot be `from` in `system_program::transfer`.",
+            "In the pool-admin path callers pass the same key for both — no",
+            "behavioural change."
           ],
           "writable": true,
           "signer": true
@@ -678,11 +699,23 @@
           "writable": true
         },
         {
+          "name": "config",
+          "docs": [
+            "referenced by the pool's v3 header. We read `protocol_admin` from",
+            "its raw bytes so the alternative signer path doesn't need Anchor",
+            "to deserialise the config (which is cheap, but this keeps the",
+            "migration handler's account list as flat as the v3 layout it's",
+            "rewriting)."
+          ]
+        },
+        {
           "name": "authority",
           "docs": [
-            "Must equal the v3 `pool_admin` field stored inside `pool.data`.",
-            "Pool-admin only; protocol-admin can't trigger this — the storage",
-            "layout is a per-pool concern."
+            "Must equal either the v3 `pool_admin` field stored inside",
+            "`pool.data`, OR the `protocol_admin` field stored inside",
+            "`config.data` (= Treasury PDA on mainnet, only reachable via",
+            "`protocol_admin.pool_migrate_v4` CPI which signs the PDA via",
+            "`signer_seeds`)."
           ],
           "writable": true,
           "signer": true
