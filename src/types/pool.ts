@@ -50,6 +50,12 @@ export interface PoolInfo {
   poolEnabled: boolean;
   swapsEnabled: boolean;
   createdAt: number;
+  /**
+   * Per-pool Address Lookup Table. `PublicKey.default` ⇒ no ALT provisioned
+   * yet (call `initialize_pool_alt` to bootstrap). When set and non-default,
+   * v0-tx builders compress per-token accounts via this ALT.
+   */
+  lookupTable: PublicKey;
   /** Unix timestamp (ms) when sync() ran. Useful for staleness checks. */
   syncedAt: number;
 }

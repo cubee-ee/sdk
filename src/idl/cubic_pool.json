@@ -501,6 +501,111 @@
       ]
     },
     {
+      "name": "initialize_pool_alt",
+      "docs": [
+        "Provision a per-pool Address Lookup Table so client SDKs can build",
+        "`VersionedTransaction`s for `add_liquidity` / `remove_liquidity` on",
+        "pools whose account count exceeds the legacy 1232-byte ceiling",
+        "(≥ 7 tokens in practice).",
+        "",
+        "# Parameters",
+        "* `recent_slot` — recent slot used by the ALT program to derive",
+        "the table address. Caller should pass",
+        "`connection.getSlot('finalized')`.",
+        "",
+        "# Flow",
+        "One transaction performs three CPIs into the ALT program:",
+        "`create_lookup_table` → `extend_lookup_table` (pool, BPT mint,",
+        "vaults, mints, standard programs) → `freeze_lookup_table`.",
+        "The ALT becomes immutable forever — its rent (~0.005 SOL for a",
+        "7-token pool) is permanently locked.",
+        "",
+        "# Authority",
+        "`pool.pool_admin`. Idempotent: rejects with `AltAlreadyInitialized`",
+        "if `pool.lookup_table != Pubkey::default()`.",
+        "",
+        "# Used by",
+        "`scripts/cli/initialize-pool-alts.ts` (one-shot bootstrap for",
+        "existing prod pools), and `sdk` after `initialize_cubic_pool` on",
+        "fresh pools."
+      ],
+      "discriminator": [
+        251,
+        135,
+        66,
+        2,
+        244,
+        73,
+        12,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "docs": [
+            "Pool to provision the ALT for. Must have `lookup_table ==",
+            "Pubkey::default()`. The handler writes the new ALT address back",
+            "onto this account."
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "`CubicPoolConfig` this pool inherits governance from. Pinned via",
+            "`pool.config`. Reading it lets the handler also accept",
+            "`config.protocol_admin` as an authority — which is the Treasury",
+            "PDA, only signable through `protocol_admin.pool_initialize_alt`."
+          ]
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Authority. Must equal either `pool.pool_admin` (per-pool owner",
+            "path) or `config.protocol_admin` (Treasury PDA via the",
+            "protocol-admin CPI wrapper). Authorises the ALT creation; the",
+            "derived ALT address is `[authority, recent_slot]`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Payer for ALT rent + per-extend top-ups. Decoupled from",
+            "`authority` because Treasury PDA (the wrapper-path authority)",
+            "owns data and so cannot be `from` in `system_program::transfer`.",
+            "In the pool-admin path callers pass the same key for both — no",
+            "behavioural change."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "lookup_table",
+          "docs": [
+            "`[authority, recent_slot]` by the ALT program. Re-derived and",
+            "matched against this account in the handler."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "alt_program",
+          "docs": [
+            "`solana_address_lookup_table_interface::id()` in the handler."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "recent_slot",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initiate_pool_admin_transfer",
       "docs": [
         "Step 1 — current `pool.pool_admin` proposes a successor."
@@ -561,6 +666,123 @@
         {
           "name": "new_admin",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "migrate_pool_v4",
+      "docs": [
+        "Rewrite a v3-layout pool account into the v4 AoS layout. One-shot,",
+        "idempotent, signed by `pool.pool_admin`. Required exactly once per",
+        "pre-existing pool after the cubic-pool program is upgraded to a",
+        "binary built against the v4 struct.",
+        "",
+        "# Used by",
+        "`scripts/ping-prod-pools.ts` reports which pools need this; the",
+        "admin runs it as a follow-up. New pools created via",
+        "`initialize_cubic_pool` skip migration entirely (they're v4 from",
+        "birth)."
+      ],
+      "discriminator": [
+        227,
+        124,
+        203,
+        29,
+        107,
+        79,
+        175,
+        240
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "referenced by the pool's v3 header. We read `protocol_admin` from",
+            "its raw bytes so the alternative signer path doesn't need Anchor",
+            "to deserialise the config (which is cheap, but this keeps the",
+            "migration handler's account list as flat as the v3 layout it's",
+            "rewriting)."
+          ]
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Must equal either the v3 `pool_admin` field stored inside",
+            "`pool.data`, OR the `protocol_admin` field stored inside",
+            "`config.data` (= Treasury PDA on mainnet, only reachable via",
+            "`protocol_admin.pool_migrate_v4` CPI which signs the PDA via",
+            "`signer_seeds`)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "range_manager_update",
+      "docs": [
+        "Tweak any subset of `virtual_balances` and / or `normalized_weights`",
+        "within the configured envelope. Range-manager only.",
+        "",
+        "# Parameters",
+        "* `vb_changes`     — sparse `[(index, new_vb)]`; may be empty.",
+        "* `weight_changes` — sparse `[(index, new_weight_bps)]`; may be",
+        "empty. The resulting weight vector must sum to `WEIGHT_SCALE`",
+        "and stay within `[MIN_WEIGHT, MAX_WEIGHT]` per token, otherwise",
+        "the whole instruction reverts."
+      ],
+      "discriminator": [
+        245,
+        183,
+        35,
+        69,
+        200,
+        10,
+        172,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "docs": [
+            "Mutated — handler writes new virtual_balances / normalized_weights",
+            "and bumps `range_manager_last_updated`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "vb_changes",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "TokenChange"
+              }
+            }
+          }
+        },
+        {
+          "name": "weight_changes",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "TokenChange"
+              }
+            }
+          }
         }
       ]
     },
@@ -668,6 +890,53 @@
       ]
     },
     {
+      "name": "set_max_selloff",
+      "docs": [
+        "Set `(max_selloff, max_selloff_period_length)` for every active",
+        "token in a single call. Pool-admin only.",
+        "",
+        "# Parameters",
+        "* `max_selloffs`   — length == `token_count`. Raw units; `0`",
+        "disables the check on that token.",
+        "* `period_lengths` — length == `token_count`. Seconds. Must be",
+        "`> 0` when paired `max_selloff > 0`."
+      ],
+      "discriminator": [
+        100,
+        44,
+        68,
+        198,
+        33,
+        58,
+        147,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "max_selloffs",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "period_lengths",
+          "type": {
+            "vec": "u32"
+          }
+        }
+      ]
+    },
+    {
       "name": "set_pool_enabled",
       "docs": [
         "Master pool kill-switch. When `enabled = false`, swaps and",
@@ -750,6 +1019,98 @@
         {
           "name": "protocol_fee_rate",
           "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_range_manager",
+      "docs": [
+        "Set or disable the range-manager pubkey on `pool`. Pool-admin only —",
+        "protocol-admin cannot reach this. Combine `new_manager =",
+        "Pubkey::default()` with `enabled = false` for the fully-disabled",
+        "state. New pools deploy with this off by default.",
+        "",
+        "# Parameters",
+        "* `new_manager` — pubkey allowed to call `range_manager_update`.",
+        "* `enabled`     — gate flag; `false` blocks the manager even if",
+        "pubkey is set."
+      ],
+      "discriminator": [
+        103,
+        102,
+        173,
+        112,
+        8,
+        2,
+        37,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_manager",
+          "type": "pubkey"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_range_manager_config",
+      "docs": [
+        "Configure the envelope the range-manager must stay within. Pool-",
+        "admin only. Limits are per-token (applied independently in the",
+        "update loop) and basis points of the CURRENT value.",
+        "",
+        "# Parameters",
+        "* `max_vb_change_bps`        — ≤ 10_000. 5% = 500.",
+        "* `max_weight_change_bps`    — ≤ 10_000.",
+        "* `min_update_interval_secs` — rate-limit between successive",
+        "`range_manager_update` calls."
+      ],
+      "discriminator": [
+        103,
+        211,
+        0,
+        200,
+        164,
+        189,
+        245,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "max_vb_change_bps",
+          "type": "u16"
+        },
+        {
+          "name": "max_weight_change_bps",
+          "type": "u16"
+        },
+        {
+          "name": "min_update_interval_secs",
+          "type": "u32"
         }
       ]
     },
@@ -1061,6 +1422,32 @@
       ]
     },
     {
+      "name": "MaxSelloffSet",
+      "discriminator": [
+        134,
+        183,
+        49,
+        134,
+        82,
+        138,
+        85,
+        234
+      ]
+    },
+    {
+      "name": "MaxSelloffWindowAdvanced",
+      "discriminator": [
+        229,
+        227,
+        163,
+        30,
+        22,
+        183,
+        78,
+        57
+      ]
+    },
+    {
       "name": "PoolAdminDisabled",
       "discriminator": [
         158,
@@ -1113,6 +1500,19 @@
       ]
     },
     {
+      "name": "PoolAltInitialized",
+      "discriminator": [
+        61,
+        210,
+        86,
+        20,
+        100,
+        253,
+        41,
+        133
+      ]
+    },
+    {
       "name": "PoolEnabledUpdated",
       "discriminator": [
         101,
@@ -1149,6 +1549,19 @@
         198,
         254,
         229
+      ]
+    },
+    {
+      "name": "PoolMigratedToV4",
+      "discriminator": [
+        168,
+        224,
+        51,
+        159,
+        66,
+        20,
+        83,
+        146
       ]
     },
     {
@@ -1240,6 +1653,45 @@
         86,
         99,
         191
+      ]
+    },
+    {
+      "name": "RangeManagerConfigSet",
+      "discriminator": [
+        187,
+        59,
+        98,
+        47,
+        108,
+        2,
+        229,
+        152
+      ]
+    },
+    {
+      "name": "RangeManagerSet",
+      "discriminator": [
+        62,
+        152,
+        235,
+        91,
+        195,
+        238,
+        83,
+        202
+      ]
+    },
+    {
+      "name": "RangeManagerUpdated",
+      "discriminator": [
+        132,
+        144,
+        100,
+        144,
+        149,
+        205,
+        212,
+        24
       ]
     },
     {
@@ -1477,9 +1929,258 @@
       "code": 6038,
       "name": "ProtocolAdminNotTreasury",
       "msg": "protocol_admin must equal the hardcoded Treasury PDA"
+    },
+    {
+      "code": 6039,
+      "name": "RangeManagerDisabled",
+      "msg": "Range manager is not enabled for this pool"
+    },
+    {
+      "code": 6040,
+      "name": "RangeManagerUnauthorized",
+      "msg": "Signer is not the configured range manager"
+    },
+    {
+      "code": 6041,
+      "name": "RangeManagerUpdateTooFrequent",
+      "msg": "Range manager update too frequent — minimum interval not yet elapsed"
+    },
+    {
+      "code": 6042,
+      "name": "RangeManagerVbChangeTooLarge",
+      "msg": "Range manager virtual balance change exceeds configured bps cap"
+    },
+    {
+      "code": 6043,
+      "name": "RangeManagerWeightChangeTooLarge",
+      "msg": "Range manager weight change exceeds configured bps cap"
+    },
+    {
+      "code": 6044,
+      "name": "RangeManagerEmptyUpdate",
+      "msg": "Range manager update must change at least one virtual balance or weight"
+    },
+    {
+      "code": 6045,
+      "name": "RangeManagerInvalidBps",
+      "msg": "Range manager bps parameter exceeds 10000"
+    },
+    {
+      "code": 6046,
+      "name": "RangeManagerWeightSumInvalid",
+      "msg": "Resulting weights do not sum to WEIGHT_SCALE after range manager update"
+    },
+    {
+      "code": 6047,
+      "name": "RangeManagerDuplicateIndex",
+      "msg": "Duplicate token index in range manager update"
+    },
+    {
+      "code": 6048,
+      "name": "MaxSelloffInvalidConfig",
+      "msg": "max_selloff_period_length must be > 0 when max_selloff > 0"
+    },
+    {
+      "code": 6049,
+      "name": "MaxSelloffExceeded",
+      "msg": "Token max-selloff threshold exceeded for current window"
+    },
+    {
+      "code": 6050,
+      "name": "AlreadyMigrated",
+      "msg": "Pool is already migrated to v4"
+    },
+    {
+      "code": 6051,
+      "name": "UnexpectedPoolSize",
+      "msg": "Unexpected pool account size — not v3 or v4"
+    },
+    {
+      "code": 6052,
+      "name": "InvalidPoolDiscriminator",
+      "msg": "Account discriminator does not match CubicPool"
+    },
+    {
+      "code": 6053,
+      "name": "AltAlreadyInitialized",
+      "msg": "Pool already has an Address Lookup Table initialised"
+    },
+    {
+      "code": 6054,
+      "name": "AltAddressMismatch",
+      "msg": "ALT address mismatch — re-derived from recent_slot doesn't match passed account"
+    },
+    {
+      "code": 6055,
+      "name": "InvalidAltProgram",
+      "msg": "Invalid Address Lookup Table program id"
     }
   ],
   "types": [
+    {
+      "name": "AssetConfig",
+      "docs": [
+        "`CubicPool` v4 — per-pool state for a weighted AMM with virtual liquidity.",
+        "",
+        "Storage layout: **Array-of-Structs (AoS)**. Per-token data lives in",
+        "`tokens: [TokenSlot; MAX_TOKENS]`. Each `TokenSlot` carries TWO nested",
+        "sub-structs:",
+        "",
+        "- `config: AssetConfig`     — admin-controlled, rarely changes (mint,",
+        "token_program, weight, max_selloff, period).",
+        "- `dynamics: AssetDynamics` — auto-updated by user txs (balances,",
+        "protocol_fees_owed, sliding-window selloff state).",
+        "",
+        "This mirrors Solend / MarginFi / Kamino's `Reserve { config, ... }`",
+        "pattern. Reading per-token data is a single struct lookup; auditors",
+        "see at a glance which fields a user can mutate vs which need pool",
+        "admin authority.",
+        "",
+        "## Storage layout — DO NOT REORDER",
+        "Backends (`onchainPoolFetcher.ts`, indexer) and v3-to-v4 migration",
+        "code both read fields by raw offset. Adding fields is OK if appended",
+        "at the END (before the trailing `reserved`) and `reserved` shrinks",
+        "accordingly. Inserting in the middle requires a new migration.",
+        "",
+        "## Derived (not stored) state",
+        "- `bpt_mint`        — derived as `[BPT_MINT_SEED, pool]` PDA.",
+        "- `bpt_total_supply`— read from `bpt_mint.supply` at runtime.",
+        "- `token_vaults[i]` — derived as ATA(pool, mint, tokens[i].config.token_program).",
+        "- `token_decimals`  — read from each mint account at runtime.",
+        "",
+        "## Migrating from v3",
+        "v3 stored per-token data as parallel arrays (`token_mints[10]`,",
+        "`token_programs[10]`, `normalized_weights[10]`, …). v4 packs the same",
+        "info into `tokens: [TokenSlot; 10]`. A one-time `migrate_pool_v4`",
+        "instruction rewrites existing accounts."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "Token mint pubkey for this slot. `Pubkey::default()` past `token_count`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token_program",
+            "docs": [
+              "SPL Token or Token-2022 program ID for this token's vault/transfers."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "normalized_weight",
+            "docs": [
+              "Normalised weight in basis points (sum across active slots == 10_000)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_selloff",
+            "docs": [
+              "Max cumulative sell volume of this token (as `amount_in` in swaps)",
+              "over the sliding window `max_selloff_period_length`. `0` disables",
+              "the check for this token. Set by pool_admin only."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_selloff_period_length",
+            "docs": [
+              "Length of the sliding window in seconds. Ignored when",
+              "`max_selloff == 0`. Set by pool_admin only."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Future-compat (do not repurpose)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetDynamics",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "virtual_balance",
+            "docs": [
+              "Virtual balance (raw token units) used by the cubic invariant",
+              "math. Decoupled from `actual_balance` to enable concentrated",
+              "liquidity. Updated by swap / add_liquidity / remove_liquidity."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "actual_balance",
+            "docs": [
+              "Mirrors the on-chain vault balance for this token. Always equals",
+              "the vault's `amount` after every successful tx (CEI ordering",
+              "keeps them in sync)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fees_owed",
+            "docs": [
+              "Accumulated protocol fees for this token (raw units), awaiting",
+              "`collect_protocol_fees`. Stored separately from `actual_balance`",
+              "so LP value isn't diluted by uncollected fees."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "previous_selloff",
+            "docs": [
+              "Sliding-window rate limiter: amount sold in the PREVIOUS window",
+              "(Cloudflare-style approximation, Solend RateLimiter pattern)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "current_selloff",
+            "docs": [
+              "Amount sold in the CURRENT window."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "window_start_timestamp",
+            "docs": [
+              "`Clock::unix_timestamp` when the current window started. New",
+              "pools: set to `now()` at init. After v3→v4 migration: set to",
+              "`now()` at migration time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Future-compat."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          }
+        ]
+      }
+    },
     {
       "name": "BannedExtensionsUpdated",
       "docs": [
@@ -1514,23 +2215,6 @@
     },
     {
       "name": "CubicPool",
-      "docs": [
-        "`CubicPool` — per-pool state for a weighted AMM with virtual liquidity.",
-        "",
-        "Each pool is a PDA derived from `[CUBIC_POOL_SEED, config_pubkey,",
-        "pool_id_le]`. One config can host many pools (different `pool_id`s).",
-        "",
-        "## Storage layout — DO NOT REORDER",
-        "Backends (`onchainPoolFetcher.ts`, indexer) read fields by raw offset.",
-        "Adding fields is fine if appended **before** `reserved` and `reserved`",
-        "shrinks accordingly so total `LEN` stays the same.",
-        "",
-        "## Derived (not stored) state",
-        "- `bpt_mint`        — derived as `[BPT_MINT_SEED, pool]` PDA.",
-        "- `bpt_total_supply`— read from `bpt_mint.supply` at runtime.",
-        "- `token_vaults[i]` — derived as ATA(pool, mint, token_programs[i]).",
-        "- `token_decimals`  — read from each mint account at runtime."
-      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1568,72 +2252,6 @@
             "type": "u64"
           },
           {
-            "name": "token_mints",
-            "docs": [
-              "Mint pubkeys for each active token, fixed length array padded with",
-              "`Pubkey::default()` past `token_count`."
-            ],
-            "type": {
-              "array": [
-                "pubkey",
-                10
-              ]
-            }
-          },
-          {
-            "name": "token_programs",
-            "docs": [
-              "Per-token program ID (`spl_token::ID` or `spl_token_2022::ID`). A",
-              "single pool may mix legacy SPL tokens and Token-2022 mints."
-            ],
-            "type": {
-              "array": [
-                "pubkey",
-                10
-              ]
-            }
-          },
-          {
-            "name": "normalized_weights",
-            "docs": [
-              "Normalised weights in basis points (sum = `WEIGHT_SCALE` = 10_000).",
-              "`weights[i] / WEIGHT_SCALE` is the target value-share of token i."
-            ],
-            "type": {
-              "array": [
-                "u64",
-                10
-              ]
-            }
-          },
-          {
-            "name": "virtual_balances",
-            "docs": [
-              "Virtual balances (raw token units) used by the cubic invariant",
-              "math. Decoupled from actual vault holdings to enable concentrated",
-              "liquidity à la Cubic AMM. Updated by every swap / add / remove."
-            ],
-            "type": {
-              "array": [
-                "u64",
-                10
-              ]
-            }
-          },
-          {
-            "name": "actual_balances",
-            "docs": [
-              "Actual balances mirrored from the on-chain vaults. Always",
-              "== vault.amount for that token (CEI ordering keeps them in sync)."
-            ],
-            "type": {
-              "array": [
-                "u64",
-                10
-              ]
-            }
-          },
-          {
             "name": "swap_fee_rate",
             "docs": [
               "Swap fee in hundredths of a basis point (precision",
@@ -1650,20 +2268,6 @@
             "type": "u16"
           },
           {
-            "name": "protocol_fees_owed",
-            "docs": [
-              "Accumulated protocol fees per token (raw units), waiting on",
-              "`collect_protocol_fees`. Stored separately from `actual_balances`",
-              "so LP value isn't diluted by uncollected fees."
-            ],
-            "type": {
-              "array": [
-                "u64",
-                10
-              ]
-            }
-          },
-          {
             "name": "created_at",
             "docs": [
               "Pool creation `Clock::unix_timestamp`. Informational only."
@@ -1674,8 +2278,7 @@
             "name": "pool_enabled",
             "docs": [
               "Master kill switch — when `false`, swaps and add/remove liquidity",
-              "all revert. Only `protocol_admin` can flip this; required to be",
-              "`false` before `debug_withdraw_liquidity` is callable."
+              "all revert. Only `protocol_admin` can flip this."
             ],
             "type": "bool"
           },
@@ -1690,32 +2293,89 @@
           {
             "name": "pool_admin",
             "docs": [
-              "Per-pool admin. Initialised to the wallet that called",
-              "`initialize_cubic_pool`. Allowed to: rotate `swap_fee_rate`,",
-              "toggle `swaps_enabled`, transfer / disable itself via the",
-              "pending/accept/disable flow. Set to `Pubkey::default()` once the",
-              "admin role is renounced — after that, no pool-admin function is",
-              "callable on this pool, ever."
+              "Per-pool admin. Owns: rotate swap_fee_rate, toggle swaps_enabled,",
+              "set range_manager, set max_selloff, transfer/disable itself."
             ],
             "type": "pubkey"
           },
           {
             "name": "pending_pool_admin",
             "docs": [
-              "Pending successor for `pool_admin` during a 2-step transfer.",
-              "`Pubkey::default()` ⇒ no transfer in flight."
+              "Pending successor for `pool_admin` during a 2-step transfer."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "range_manager",
+            "docs": [
+              "Pubkey allowed to call `range_manager_update`. `Pubkey::default()`",
+              "⇒ no manager set."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "range_manager_enabled",
+            "docs": [
+              "`false` ⇒ all `range_manager_update` calls revert."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "range_manager_max_vb_change_bps",
+            "type": "u16"
+          },
+          {
+            "name": "range_manager_max_weight_change_bps",
+            "type": "u16"
+          },
+          {
+            "name": "range_manager_min_update_interval_secs",
+            "type": "u32"
+          },
+          {
+            "name": "range_manager_last_updated",
+            "type": "i64"
+          },
+          {
+            "name": "tokens",
+            "docs": [
+              "All per-token state. Slot `i` is for the i-th token. Slots past",
+              "`token_count` are zero-initialised and ignored."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "TokenSlot"
+                  }
+                },
+                10
+              ]
+            }
+          },
+          {
+            "name": "lookup_table",
+            "docs": [
+              "Per-pool Address Lookup Table address. Holds pool-scoped accounts",
+              "(pool PDA, BPT mint, vaults, mints, token programs) so client SDKs",
+              "can build VersionedTransactions for `add_liquidity` / `remove_liquidity`",
+              "without hitting the 1232-byte legacy-tx ceiling on multi-token pools.",
+              "",
+              "`Pubkey::default()` ⇒ ALT not yet initialised. SDK falls back to",
+              "legacy tx (will only work for small pools). Set by `initialize_pool_alt`,",
+              "frozen on-chain so depositors don't worry about authority abuse."
             ],
             "type": "pubkey"
           },
           {
             "name": "reserved",
             "docs": [
-              "Forward-compat padding (do not repurpose without a migration plan)."
+              "Forward-compat padding for pool-level fields."
             ],
             "type": {
               "array": [
                 "u8",
-                64
+                32
               ]
             }
           }
@@ -1898,6 +2558,89 @@
       }
     },
     {
+      "name": "MaxSelloffSet",
+      "docs": [
+        "Emitted by `set_max_selloff`. `max_selloff` and",
+        "`max_selloff_period_length` are the post-update arrays of length",
+        "`token_count`. A zero in `max_selloff[i]` means the check is",
+        "disabled for token i."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_selloff",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "max_selloff_period_length",
+            "type": {
+              "vec": "u32"
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaxSelloffWindowAdvanced",
+      "docs": [
+        "Emitted from inside `swap` whenever the sliding-window check for",
+        "`token_in_index` runs. Carries effective_selloff (post-update) for",
+        "indexers / monitoring dashboards."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_index",
+            "type": "u8"
+          },
+          {
+            "name": "effective_selloff",
+            "type": "u64"
+          },
+          {
+            "name": "max_selloff",
+            "type": "u64"
+          },
+          {
+            "name": "previous_selloff",
+            "type": "u64"
+          },
+          {
+            "name": "current_selloff",
+            "type": "u64"
+          },
+          {
+            "name": "window_start_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "PoolAdminDisabled",
       "type": {
         "kind": "struct",
@@ -1984,6 +2727,55 @@
           },
           {
             "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolAltInitialized",
+      "docs": [
+        "Emitted by `initialize_pool_alt` once the ALT is created, extended",
+        "with all pool-scoped addresses, and frozen. Off-chain SDK / indexer",
+        "uses this as the signal that v0 transactions are usable for this pool."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "docs": [
+              "Pool PDA."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lookup_table",
+            "docs": [
+              "Address Lookup Table account created."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Wallet that authored creation (matches `pool.pool_admin` at the",
+              "time of the call). After freeze the ALT has no authority."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "address_count",
+            "docs": [
+              "Number of addresses written into the ALT."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "`Clock::unix_timestamp` at initialisation."
+            ],
             "type": "i64"
           }
         ]
@@ -2146,6 +2938,39 @@
           {
             "name": "bpt_mint",
             "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolMigratedToV4",
+      "docs": [
+        "Emitted by `migrate_pool_v4` after a successful v3 → v4 storage",
+        "reorganization. Off-chain monitors should treat this as the",
+        "\"this specific pool is now safe to interact with at v4\" signal."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_size",
+            "type": "u32"
+          },
+          {
+            "name": "new_size",
+            "type": "u32"
           },
           {
             "name": "timestamp",
@@ -2394,6 +3219,124 @@
       }
     },
     {
+      "name": "RangeManagerConfigSet",
+      "docs": [
+        "Emitted by `set_range_manager_config`. Carries the full effective",
+        "envelope so off-chain indexers don't need to re-fetch the pool."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_vb_change_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_weight_change_bps",
+            "type": "u16"
+          },
+          {
+            "name": "min_update_interval_secs",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RangeManagerSet",
+      "docs": [
+        "Emitted by `set_range_manager`. Both the pubkey and the enabled flag",
+        "are bundled into a single event. `new_manager == Pubkey::default()`",
+        "AND `enabled = false` is the \"fully disabled\" state."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RangeManagerUpdated",
+      "docs": [
+        "Emitted by `range_manager_update` after every check passes and state",
+        "is committed. `vb_indices` / `vb_new_values` and `weight_indices` /",
+        "`weight_new_values` are aligned slices (may be empty)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "vb_indices",
+            "type": "bytes"
+          },
+          {
+            "name": "vb_new_values",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "weight_indices",
+            "type": "bytes"
+          },
+          {
+            "name": "weight_new_values",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Swap",
       "docs": [
         "Emitted by `swap` after the trade executes.",
@@ -2505,6 +3448,50 @@
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenChange",
+      "docs": [
+        "Single (token_index, new_value) entry. Used by both the",
+        "virtual-balance and weight change lists."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u8"
+          },
+          {
+            "name": "new_value",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenSlot",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": {
+              "defined": {
+                "name": "AssetConfig"
+              }
+            }
+          },
+          {
+            "name": "dynamics",
+            "type": {
+              "defined": {
+                "name": "AssetDynamics"
+              }
+            }
           }
         ]
       }
