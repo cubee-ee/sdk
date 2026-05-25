@@ -36,6 +36,101 @@ export interface PriceMap {
   [mint: string]: number;
 }
 
+// ── Swap route types ──
+
+export interface SwapRouteEntry {
+  poolAddress: string;
+  poolName: string;
+  amountIn: string;
+  expectedOut: string;
+  percentage: number;
+  swapFee: number;
+  tokenProgramIn: string;
+  tokenProgramOut: string;
+  tokenInIndex: number;
+  tokenOutIndex: number;
+  vaultIn: string | null;
+  vaultOut: string | null;
+}
+
+export interface SwapRouteResponse {
+  routes: SwapRouteEntry[];
+  totalAmountIn: string;
+  totalExpectedOut: string;
+  effectivePrice: number;
+  priceImpact: number;
+  spotPrice: number;
+  /** Estimated XP earned from this swap (based on LP fees generated) */
+  estimatedXp: number;
+}
+
+// ── Leaderboard types ──
+
+export interface LeaderboardEntry {
+  address: string;
+  points: number;
+  place: number;
+}
+
+export interface LeaderboardResponse {
+  total: number;
+  page: number;
+  limit: number;
+  data: LeaderboardEntry[];
+}
+
+export interface LeaderboardUserStats {
+  place: number;
+  address: string;
+  points: number;
+  lastAccrualSwapUsd: number;
+  lastAccrualLiqUsd: number;
+  lastAccrualAt: string | null;
+}
+
+export interface XpAccrualHistoryEntry {
+  accrualTime: string;
+  swapVolumeUsd: number;
+  swapXp: number;
+  lpValueUsd: number;
+  lpXp: number;
+  totalXp: number;
+}
+
+export interface XpAccrualHistoryResponse {
+  total: number;
+  page: number;
+  limit: number;
+  data: XpAccrualHistoryEntry[];
+}
+
+export interface EpochHistoryEntry {
+  epoch: number;
+  start: string;
+  end: string;
+  multiplier: number;
+  swapXpPerUsdLpFee: number;
+  lpXpPerUsd: number;
+  isCurrent: boolean;
+}
+
+export interface LeaderboardEpochResponse {
+  currentEpoch: number;
+  currentEpochStart: string;
+  nextEpochStart: string;
+  msUntilNextEpoch: number;
+  currentMultiplier: number;
+  baseRates: {
+    swapXpPerUsdLpFee: number;
+    lpXpPerUsd: number;
+  };
+  currentRates: {
+    swapXpPerUsdLpFee: number;
+    lpXpPerUsd: number;
+  };
+  epochs: EpochHistoryEntry[];
+}
+
 /**
  * REST wrapper around the Cube backend. Every method is a SdkResult; no
  * exceptions escape. If a request fails, the result carries a
@@ -92,8 +187,8 @@ export class CubeBackendClient {
     return this.getDataField<T>("/api/pools/stats");
   }
 
-  getPortfolio<T>(owner: string): Promise<SdkResult<T>> {
-    return this.getDataField<T>(`/api/pools/portfolio?owner=${encodeURIComponent(owner)}`);
+  getPortfolio<T>(wallet: string): Promise<SdkResult<T>> {
+    return this.getDataField<T>(`/api/pools/portfolio?wallet=${encodeURIComponent(wallet)}`);
   }
 
   getAllTokens<T>(): Promise<SdkResult<T>> {
@@ -113,13 +208,60 @@ export class CubeBackendClient {
     return this.getDataField<T>(`/api/pools/${addr}/transactions?${qs.toString()}`);
   }
 
-  getSwapRoute<T>(
+  getSwapRoute(
     tokenIn: string,
     tokenOut: string,
-    amountIn: string
-  ): Promise<SdkResult<T>> {
-    const qs = new URLSearchParams({ tokenIn, tokenOut, amountIn });
-    return this.getDataField<T>(`/api/swap/route?${qs.toString()}`);
+    amountIn: string,
+    decimalsIn: number = 9,
+  ): Promise<SdkResult<SwapRouteResponse>> {
+    const qs = new URLSearchParams({
+      tokenIn,
+      tokenOut,
+      amountIn,
+      decimalsIn: String(decimalsIn),
+    });
+    return this.getDataField<SwapRouteResponse>(
+      `/api/pools/swap-route?${qs.toString()}`,
+    );
+  }
+
+  // ── Leaderboard ──
+
+  getLeaderboard(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<SdkResult<LeaderboardResponse>> {
+    const qs = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    return this.get<LeaderboardResponse>(`/api/leaderboard?${qs.toString()}`);
+  }
+
+  getLeaderboardUser(
+    address: string,
+  ): Promise<SdkResult<LeaderboardUserStats>> {
+    return this.getDataField<LeaderboardUserStats>(
+      `/api/leaderboard/user/${encodeURIComponent(address)}`,
+    );
+  }
+
+  getLeaderboardUserHistory(
+    address: string,
+    page: number = 1,
+    limit: number = 50,
+  ): Promise<SdkResult<XpAccrualHistoryResponse>> {
+    const qs = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    return this.get<XpAccrualHistoryResponse>(
+      `/api/leaderboard/user/${encodeURIComponent(address)}/history?${qs.toString()}`,
+    );
+  }
+
+  getLeaderboardEpoch(): Promise<SdkResult<LeaderboardEpochResponse>> {
+    return this.get<LeaderboardEpochResponse>("/api/leaderboard/epoch");
   }
 
   getTokenPrices(mints: string[]): Promise<SdkResult<PriceMap>> {

@@ -36,6 +36,10 @@ describe("applySwapFee", () => {
     expect(applySwapFee(1_000_000n, 300)).toBe(999_700n);
   });
 
+  test("throws when non-zero fee rounds to zero", () => {
+    expect(() => applySwapFee(1n, 3000)).toThrow(/rounds to zero/);
+  });
+
   test("throws on negative rate", () => {
     expect(() => applySwapFee(1n, -1)).toThrow();
   });

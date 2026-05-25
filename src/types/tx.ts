@@ -56,6 +56,10 @@ export interface SingleTokenDepositQuote {
   expectedOuts: BN[];
   /** Per-leg min_out derived from slippage. */
   minOuts: BN[];
+  /** Amounts the helper will pass to add_liquidity after proportional capping. */
+  depositedAmounts: BN[];
+  /** Helper-held excess returned to the user after add_liquidity. */
+  refundAmounts: BN[];
   /** Projected BPT to receive (ballpark, pre-CPI). */
   estimatedBpt: BN;
   /** Indices of tokens excluded from the deposit (actBal == 0). */

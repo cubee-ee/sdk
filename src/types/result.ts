@@ -28,9 +28,11 @@ export type SdkErrorCode =
   | "insufficient_funds"
   | "pool_disabled"
   | "swaps_disabled"
+  | "unsupported_pool_state"
   | "slippage_exceeded"
   | "simulation_failed"
   | "tx_build_failed"
+  | "alt_fetch_failed"
   | "unknown";
 
 export const ok = <T>(data: T): SdkResult<T> => ({ ok: true, data });

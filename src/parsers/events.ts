@@ -29,7 +29,6 @@ const DISC = {
   BannedExtensionsUpdated:  Buffer.from([107, 126, 13, 149, 182, 108, 139, 202]),
   // Stld:
   SingleTokenDeposit:       Buffer.from([215, 54, 137, 104, 219, 39, 164, 235]),
-  HelperInitialized:        Buffer.from([66, 82, 73, 69, 146, 184, 145, 242]),
 };
 
 type DiscName = keyof typeof DISC;
@@ -166,7 +165,6 @@ function decodeEvent(name: DiscName, buf: Buffer): CubicPoolEvent | null {
     case "DebugLiquidityWithdrawn":
     case "PoolStateLog":
     case "PoolInfo":
-    case "HelperInitialized":
       return { kind: "Unknown", name, data: { raw: buf.toString("base64") } };
   }
 }

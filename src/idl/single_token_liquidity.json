@@ -1,0 +1,745 @@
+{
+  "address": "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2",
+  "metadata": {
+    "name": "single_token_liquidity",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "1-token liquidity provisioning helper for Cubic Pool"
+  },
+  "instructions": [
+    {
+      "name": "deposit_single_token",
+      "docs": [
+        "Single-token liquidity-add into a Cubic Pool. See",
+        "`instructions/deposit_single_token.rs` for the",
+        "`remaining_accounts` layout.",
+        "",
+        "# Parameters",
+        "* `amount_in`              — raw units of",
+        "`pool.token_mints[token_in_index]`.",
+        "* `token_in_index`         — index in `pool.token_mints`.",
+        "* `slippage_hundredths_bps`— slippage bound applied to every",
+        "per-leg swap. Same scale as `cubic_pool.swap_fee_rate`",
+        "(1_000_000 = 100%). Must be in `[10, 1_000_000]`",
+        "= `[0.001%, 100%]`.",
+        "* `minimum_bpt_amount`     — final guard on BPT received by user.",
+        "",
+        "# Used by",
+        "SDK `SingleTokenClient`, frontend `useSingleTokenDeposit` hook."
+      ],
+      "discriminator": [
+        166,
+        136,
+        166,
+        47,
+        199,
+        192,
+        86,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "helper"
+        },
+        {
+          "name": "bpt_mint",
+          "writable": true
+        },
+        {
+          "name": "helper_bpt_account",
+          "docs": [
+            "Helper's BPT account (where the freshly-minted BPT lands before",
+            "being forwarded to the user)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_bpt_account",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "cubic_pool_program"
+        },
+        {
+          "name": "bpt_token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "token_in_index",
+          "type": "u8"
+        },
+        {
+          "name": "slippage_hundredths_bps",
+          "type": "u32"
+        },
+        {
+          "name": "minimum_bpt_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_sol",
+      "docs": [
+        "Drain lamports from any stld-owned account down to (not below)",
+        "rent-exempt minimum.",
+        "",
+        "# Authority",
+        "Treasury PDA only — in practice via CPI from",
+        "`protocol_admin::stld_withdraw_sol`.",
+        "",
+        "# Parameters",
+        "* `amount` — lamports; > 0 and ≤",
+        "`source.lamports() - rent_exempt_minimum`."
+      ],
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "docs": [
+            "Cubic-pool config whose `protocol_admin` is the authority for this",
+            "drain. In production it's the Treasury PDA of the `protocol-admin`",
+            "program."
+          ]
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CubicPool",
+      "discriminator": [
+        137,
+        210,
+        42,
+        22,
+        209,
+        156,
+        43,
+        78
+      ]
+    },
+    {
+      "name": "CubicPoolConfig",
+      "discriminator": [
+        4,
+        29,
+        243,
+        10,
+        142,
+        64,
+        232,
+        118
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "SingleTokenDeposit",
+      "discriminator": [
+        215,
+        54,
+        137,
+        104,
+        219,
+        39,
+        164,
+        235
+      ]
+    },
+    {
+      "name": "StldSolWithdrawn",
+      "discriminator": [
+        24,
+        246,
+        27,
+        39,
+        222,
+        196,
+        135,
+        61
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "ZeroAmount",
+      "msg": "Zero amount"
+    },
+    {
+      "code": 6001,
+      "name": "ZeroFeeAmount",
+      "msg": "Swap amount is too small: fee rounds to zero"
+    },
+    {
+      "code": 6002,
+      "name": "SlippageTooLow",
+      "msg": "Slippage below 0.001%"
+    },
+    {
+      "code": 6003,
+      "name": "SlippageTooHigh",
+      "msg": "Slippage above 100%"
+    },
+    {
+      "code": 6004,
+      "name": "PoolDisabled",
+      "msg": "Pool disabled"
+    },
+    {
+      "code": 6005,
+      "name": "SwapsDisabled",
+      "msg": "Swaps disabled"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidTokenCount",
+      "msg": "Invalid token count"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidTokenIndex",
+      "msg": "Invalid token index"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAccountLayout",
+      "msg": "Invalid remaining_accounts layout"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidMint",
+      "msg": "Invalid mint passed in remaining_accounts"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidTokenProgram",
+      "msg": "Invalid token program passed in remaining_accounts"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidVault",
+      "msg": "Invalid vault: must be ATA(pool, mint, token_program)"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidHelperAta",
+      "msg": "Invalid helper ATA: must be ATA(helper_pda, mint, token_program)"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidUserAta",
+      "msg": "User token account does not match expected owner/mint"
+    },
+    {
+      "code": 6014,
+      "name": "PoolNotSeeded",
+      "msg": "Pool not seeded: need at least one actual_balance > 0"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidVirtualBalance",
+      "msg": "Virtual balance of zero for a token"
+    },
+    {
+      "code": 6016,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6017,
+      "name": "MathUnderflow",
+      "msg": "Math underflow"
+    },
+    {
+      "code": 6018,
+      "name": "ZeroExpectedOut",
+      "msg": "Expected swap output is zero"
+    },
+    {
+      "code": 6019,
+      "name": "InsufficientBpt",
+      "msg": "Received BPT less than minimum_bpt_amount"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidBptMint",
+      "msg": "Invalid BPT mint: must be [bpt_mint, pool] PDA in cubic-pool program"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidCubicPoolProgram",
+      "msg": "Invalid Cubic Pool program id"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidUserBptAccount",
+      "msg": "User BPT account mismatch"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidHelperBptAccount",
+      "msg": "Helper BPT account mismatch"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidPoolOwner",
+      "msg": "Pool account is owned by a different program"
+    },
+    {
+      "code": 6025,
+      "name": "PoolHasZeroBalanceToken",
+      "msg": "Pool has at least one token with actual_balance = 0; single-token deposit unsupported in this state"
+    },
+    {
+      "code": 6026,
+      "name": "AmountTooSmall",
+      "msg": "amount_in is too small: truncation would leave a pool token with zero allocation"
+    },
+    {
+      "code": 6027,
+      "name": "Unauthorized",
+      "msg": "Unauthorized"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidSourceOwner",
+      "msg": "Source account must be owned by this program"
+    },
+    {
+      "code": 6029,
+      "name": "WouldBreakRentExempt",
+      "msg": "Withdrawal would break rent exemption"
+    }
+  ],
+  "types": [
+    {
+      "name": "CubicPool",
+      "docs": [
+        "`CubicPool` — per-pool state for a weighted AMM with virtual liquidity.",
+        "",
+        "Each pool is a PDA derived from `[CUBIC_POOL_SEED, config_pubkey,",
+        "pool_id_le]`. One config can host many pools (different `pool_id`s).",
+        "",
+        "## Storage layout — DO NOT REORDER",
+        "Backends (`onchainPoolFetcher.ts`, indexer) read fields by raw offset.",
+        "Adding fields is fine if appended **before** `reserved` and `reserved`",
+        "shrinks accordingly so total `LEN` stays the same.",
+        "",
+        "## Derived (not stored) state",
+        "- `bpt_mint`        — derived as `[BPT_MINT_SEED, pool]` PDA.",
+        "- `bpt_total_supply`— read from `bpt_mint.supply` at runtime.",
+        "- `token_vaults[i]` — derived as ATA(pool, mint, token_programs[i]).",
+        "- `token_decimals`  — read from each mint account at runtime."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "`CubicPoolConfig` this pool inherits governance from. Pinned at",
+              "init, used both as a PDA seed and at runtime in admin-instruction",
+              "constraints (`pool.config == config.key()`)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for the pool PDA. Stored so signer-seed reconstruction is",
+              "O(1) instead of an expensive `find_program_address` per CPI."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "token_count",
+            "docs": [
+              "Number of active tokens in the pool, in [MIN_TOKENS, MAX_TOKENS] =",
+              "[2, 10]. Slots beyond `token_count` are zeroed and ignored."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "User-chosen 64-bit salt baked into the PDA seeds, allowing multiple",
+              "pools per config without re-deploying. Unique per (config, pool_id)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_mints",
+            "docs": [
+              "Mint pubkeys for each active token, fixed length array padded with",
+              "`Pubkey::default()` past `token_count`."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                10
+              ]
+            }
+          },
+          {
+            "name": "token_programs",
+            "docs": [
+              "Per-token program ID (`spl_token::ID` or `spl_token_2022::ID`). A",
+              "single pool may mix legacy SPL tokens and Token-2022 mints."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                10
+              ]
+            }
+          },
+          {
+            "name": "normalized_weights",
+            "docs": [
+              "Normalised weights in basis points (sum = `WEIGHT_SCALE` = 10_000).",
+              "`weights[i] / WEIGHT_SCALE` is the target value-share of token i."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "virtual_balances",
+            "docs": [
+              "Virtual balances (raw token units) used by the cubic invariant",
+              "math. Decoupled from actual vault holdings to enable concentrated",
+              "liquidity à la Cubic AMM. Updated by every swap / add / remove."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "actual_balances",
+            "docs": [
+              "Actual balances mirrored from the on-chain vaults. Always",
+              "== vault.amount for that token (CEI ordering keeps them in sync)."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "swap_fee_rate",
+            "docs": [
+              "Swap fee in hundredths of a basis point (precision",
+              "`SWAP_FEE_PRECISION` = 1_000_000). 100_000 = 10% (current cap)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "protocol_fee_rate",
+            "docs": [
+              "Share of each swap fee taken by the protocol, in basis points",
+              "(precision `PROTOCOL_FEE_PRECISION` = 10_000). 5_000 = 50% (cap)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fees_owed",
+            "docs": [
+              "Accumulated protocol fees per token (raw units), waiting on",
+              "`collect_protocol_fees`. Stored separately from `actual_balances`",
+              "so LP value isn't diluted by uncollected fees."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                10
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Pool creation `Clock::unix_timestamp`. Informational only."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pool_enabled",
+            "docs": [
+              "Master kill switch — when `false`, swaps and add/remove liquidity",
+              "all revert. Only `protocol_admin` can flip this; required to be",
+              "`false` before `debug_withdraw_liquidity` is callable."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "swaps_enabled",
+            "docs": [
+              "Trading switch — `false` blocks swaps but still allows LP",
+              "add/remove. Either `pool_admin` or `config.protocol_admin` can flip."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pool_admin",
+            "docs": [
+              "Per-pool admin. Initialised to the wallet that called",
+              "`initialize_cubic_pool`. Allowed to: rotate `swap_fee_rate`,",
+              "toggle `swaps_enabled`, transfer / disable itself via the",
+              "pending/accept/disable flow. Set to `Pubkey::default()` once the",
+              "admin role is renounced — after that, no pool-admin function is",
+              "callable on this pool, ever."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_pool_admin",
+            "docs": [
+              "Pending successor for `pool_admin` during a 2-step transfer.",
+              "`Pubkey::default()` ⇒ no transfer in flight."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Forward-compat padding (do not repurpose without a migration plan)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CubicPoolConfig",
+      "docs": [
+        "`CubicPoolConfig` — protocol-level governance for every pool created",
+        "against this account.",
+        "",
+        "One config can host many pools (each pool stores `config: Pubkey`).",
+        "Per-pool admin (level-1: rotates `swap_fee_rate`, toggles `swaps_enabled`)",
+        "lives on `CubicPool::pool_admin`. This config carries only the",
+        "protocol-level admin (level-2) plus protocol-wide defaults."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "protocol_admin",
+            "docs": [
+              "Protocol-level admin. Allowed to: pause pools, change",
+              "`protocol_fee_rate`, collect protocol fees, drain via",
+              "`debug_withdraw_liquidity`, update `banned_extensions`, withdraw",
+              "SOL from program-owned accounts, and rotate itself via the",
+              "pending/accept flow. Set to a designated authority (typically the",
+              "Treasury PDA of the `protocol-admin` program) at config init."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_protocol_admin",
+            "docs": [
+              "Pending successor for `protocol_admin` during a 2-step transfer.",
+              "`Pubkey::default()` ⇒ no transfer in flight."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "default_protocol_fee_rate",
+            "docs": [
+              "Default `protocol_fee_rate` (in basis points, max 5000 = 50%) seeded",
+              "onto every new pool created against this config. Pools may diverge",
+              "later via `set_protocol_fee_rate`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "banned_extensions",
+            "docs": [
+              "Bitmap of banned Token-2022 extension types. Bit N set ⇒ extension",
+              "type N is rejected at pool init. Maintained by `protocol_admin` via",
+              "`set_banned_extensions`. Defaults to `DEFAULT_BANNED_EXTENSIONS`",
+              "(TransferFee, ConfidentialTransfer, NonTransferable, …)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Forward-compatibility padding so future fields can be added without",
+              "migrating existing config accounts."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                120
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SingleTokenDeposit",
+      "docs": [
+        "Emitted at the end of `deposit_single_token` with everything an",
+        "indexer needs to reconstruct the user-facing receipt without",
+        "re-fetching state.",
+        "",
+        "# Fields",
+        "* `helper`                   — helper PDA pubkey.",
+        "* `pool`                     — Cubic Pool PDA.",
+        "* `user`                     — depositor.",
+        "* `token_in_index`           — index of the supplied token.",
+        "* `amount_in`                — raw input.",
+        "* `slippage_hundredths_bps`  — slippage bound used for each leg.",
+        "* `allocations`              — pre-CPI per-token slice plan.",
+        "* `deposited_amounts`        — post-CPI helper balances actually fed",
+        "to `add_liquidity` (after `cap_deposit_amounts_to_lp_ratio`).",
+        "* `bpt_received`             — BPT minted to the user.",
+        "* `dust_refunded`            — total tokens (raw, summed across",
+        "tokens) returned from helper → user."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "helper",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_in_index",
+            "type": "u8"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "slippage_hundredths_bps",
+            "type": "u32"
+          },
+          {
+            "name": "allocations",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "deposited_amounts",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "bpt_received",
+            "type": "u64"
+          },
+          {
+            "name": "dust_refunded",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StldSolWithdrawn",
+      "docs": [
+        "Emitted by `withdraw_sol` after lamports move out of a stld-owned",
+        "account."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

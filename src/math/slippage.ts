@@ -19,12 +19,15 @@ export function applySlippage(expected: bigint, slippageHbps: number): bigint {
 export function applySwapFee(amount: bigint, swapFeeRate: number): bigint {
   if (swapFeeRate < 0) throw new Error("swapFee: negative rate");
   const fee = (amount * BigInt(swapFeeRate)) / BigInt(SWAP_FEE_PRECISION);
+  if (swapFeeRate > 0 && fee === 0n) {
+    throw new Error("swapFee: amount too small, fee rounds to zero");
+  }
   return amount - fee;
 }
 
 /**
  * LP-accessible balances: lp_actual = actual - pfo; lp_virtual scaled to
- * match. Matches stld's `lp_balances`.
+ * match. Used by the off-chain single-token quote in `math/singleToken`.
  */
 export function lpBalances(actual: bigint, virtualBal: bigint, pfo: bigint): { lpActual: bigint; lpVirtual: bigint } {
   const lpActual = actual >= pfo ? actual - pfo : 0n;

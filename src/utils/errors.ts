@@ -41,7 +41,7 @@ export function toSdkError(cause: unknown): SdkError {
   if (/429|rate limit/i.test(msg)) {
     return { code: "rpc_rate_limited", humanMessage: "RPC rate-limited — slow down", cause };
   }
-  if (/fetch failed|ECONNREFUSED|ENOTFOUND/i.test(msg)) {
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND|Proxy error|-32056|-32052|403/i.test(msg)) {
     return { code: "rpc_unavailable", humanMessage: "RPC endpoint unreachable", cause };
   }
   if (/Account does not exist|account not found/i.test(msg)) {

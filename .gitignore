@@ -4,4 +4,6 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.*.example
 package-lock.json
+*.tgz
