@@ -16,41 +16,41 @@ export const NETWORK_PROGRAMS: Record<Network, NetworkPrograms> = {
     // disabled in the frontend. If/when stld ships on mainnet, replace this
     // with the real mainnet program ID.
     singleTokenLiquidity: new PublicKey(
-      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
+      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2",
     ),
     protocolAdmin: new PublicKey(
-      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
+      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81",
     ),
   },
   devnet: {
     cubicPool: new PublicKey("8iQtGj9mcUfFUGaiCpPy89swC3s8YTC8FhVZWfgeZhwu"),
     singleTokenLiquidity: new PublicKey(
-      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
+      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2",
     ),
     protocolAdmin: new PublicKey(
-      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
+      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81",
     ),
   },
   localnet: {
     cubicPool: new PublicKey("8iQtGj9mcUfFUGaiCpPy89swC3s8YTC8FhVZWfgeZhwu"),
     singleTokenLiquidity: new PublicKey(
-      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2"
+      "7BpdUH1tzTSXLuQNo6YpjJ8Eagw8AkrS6cnkxiJdCFS2",
     ),
     protocolAdmin: new PublicKey(
-      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81"
+      "3jiojHZbjJQ7QLMGSTjFwxVEmx4NtuRy34nLAmsJME81",
     ),
   },
 };
 
 export const DEFAULT_RPC_ENDPOINT: Record<Network, string> = {
-  mainnet: "https://api.mainnet-beta.solana.com",
+  mainnet: "https://solana.drpc.org",
   devnet: "https://api.devnet.solana.com",
   localnet: "http://127.0.0.1:8899",
 };
 
 export const DEFAULT_RPC_ENDPOINTS: Record<Network, string[]> = {
   mainnet: [
-    "https://api.mainnet-beta.solana.com",
+    "https://solana.drpc.org",
     "https://solana-rpc.publicnode.com",
     "https://solana.api.pocket.network",
   ],
