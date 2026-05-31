@@ -1,22 +1,60 @@
+import cubicPoolIdl from "../idl/cubic_pool.json";
 import { SdkError, SdkErrorCode } from "../types/result";
 
-const CONTRACT_ERROR_MAP: Record<number, { code: SdkErrorCode; message: string }> = {
-  // cubic-pool error codes (see programs/cubic-pool/src/errors.rs)
-  6000: { code: "invalid_input", message: "Invalid token count" },
-  6001: { code: "invalid_input", message: "Invalid token index" },
-  6002: { code: "invalid_input", message: "Invalid weights — must sum to 10000" },
-  6003: { code: "invalid_input", message: "Invalid virtual balances" },
-  6004: { code: "insufficient_funds", message: "Insufficient pool liquidity" },
-  6005: { code: "slippage_exceeded", message: "Slippage tolerance exceeded" },
-  6006: { code: "invalid_input", message: "Invalid token amounts" },
-  6007: { code: "slippage_exceeded", message: "BPT received is below the minimum requested" },
-  6009: { code: "invalid_input", message: "Swap fee rate exceeds the allowed maximum" },
-  6011: { code: "math_overflow", message: "Math overflow" },
-  6012: { code: "math_overflow", message: "Math underflow" },
-  6022: { code: "pool_disabled", message: "Pool is disabled" },
-  6023: { code: "swaps_disabled", message: "Swaps are disabled on this pool" },
-  6025: { code: "invalid_input", message: "Zero amount" },
+const ANCHOR_NAME_TO_SDK: Record<string, SdkErrorCode> = {
+  InvalidTokenCount: "invalid_input",
+  InvalidTokenIndex: "invalid_input",
+  InvalidWeights: "invalid_input",
+  InvalidVirtualBalances: "invalid_input",
+  InsufficientLiquidity: "insufficient_funds",
+  SlippageExceeded: "slippage_exceeded",
+  InvalidAmounts: "invalid_input",
+  InsufficientBptOut: "slippage_exceeded",
+  InsufficientTokensOut: "slippage_exceeded",
+  FeeRateMaxExceeded: "invalid_input",
+  ProtocolFeeRateMaxExceeded: "invalid_input",
+  MathOverflow: "math_overflow",
+  MathUnderflow: "math_overflow",
+  DivisionByZero: "math_overflow",
+  TokenMintMismatch: "invalid_input",
+  InvalidTokenDecimals: "invalid_input",
+  AmountOutExceedsBalance: "invalid_input",
+  InvalidBptAmount: "invalid_input",
+  Unauthorized: "invalid_input",
+  InvalidMint: "invalid_input",
+  PoolDisabled: "pool_disabled",
+  SwapsDisabled: "swaps_disabled",
+  PoolMustBeDisabled: "invalid_input",
+  ZeroAmount: "invalid_input",
+  ZeroFeeAmount: "invalid_input",
+  BannedExtension: "invalid_input",
+  TokenProgramMismatch: "invalid_input",
+  UserTokenAccountOwnerMismatch: "invalid_input",
+  InitialLiquidityTooSmall: "invalid_input",
+  InvalidTokenProgram: "invalid_input",
+  InvalidVault: "invalid_input",
+  InvalidSourceOwner: "invalid_input",
+  WouldBreakRentExempt: "invalid_input",
+  PoolAdminDisabled: "invalid_input",
+  ProtocolAdminUnset: "invalid_input",
+  NoPendingAdmin: "invalid_input",
+  NotPendingAdmin: "invalid_input",
+  InvalidPendingAdmin: "invalid_input",
+  ProtocolAdminNotTreasury: "invalid_input",
 };
+
+const CONTRACT_ERROR_MAP: Record<number, { code: SdkErrorCode; message: string }> =
+  Object.fromEntries(
+    (cubicPoolIdl.errors as Array<{ code: number; name: string; msg: string }>).map(
+      (anchorError) => [
+        anchorError.code,
+        {
+          code: ANCHOR_NAME_TO_SDK[anchorError.name] ?? "invalid_input",
+          message: anchorError.msg,
+        },
+      ]
+    )
+  );
 
 /**
  * Convert a raw error (possibly from Anchor, web3.js, or fetch) into a
@@ -39,7 +77,7 @@ export function toSdkError(cause: unknown): SdkError {
     return { code: "rpc_timeout", humanMessage: "RPC timed out", cause };
   }
   if (/429|rate limit/i.test(msg)) {
-    return { code: "rpc_rate_limited", humanMessage: "RPC rate-limited — slow down", cause };
+    return { code: "rpc_rate_limited", humanMessage: "RPC rate-limited - slow down", cause };
   }
   if (/fetch failed|ECONNREFUSED|ENOTFOUND|Proxy error|-32056|-32052|403/i.test(msg)) {
     return { code: "rpc_unavailable", humanMessage: "RPC endpoint unreachable", cause };
@@ -75,4 +113,9 @@ function extractErrorCode(msg: string): number | null {
   const dec = msg.match(/Error Number:\s*(\d+)/);
   if (dec) return parseInt(dec[1], 10);
   return null;
+}
+
+/** @internal Exported for tests */
+export function contractErrorMapForTests(): typeof CONTRACT_ERROR_MAP {
+  return CONTRACT_ERROR_MAP;
 }
