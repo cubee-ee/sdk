@@ -6,8 +6,9 @@ Cubee uses **Sign In With Solana (SIWS)** for wallet-based authentication. The f
 
 1. Request a nonce from the backend
 2. Sign the returned message with the wallet
-3. Submit the signature to receive a JWT
-4. Use the JWT for authenticated API calls
+3. Submit the signature to receive an access token + refresh token
+4. Use the access token for authenticated API calls
+5. SDK auto-refreshes when the access token expires
 
 ## Prerequisites
 
@@ -16,23 +17,58 @@ Cubee uses **Sign In With Solana (SIWS)** for wallet-based authentication. The f
 
 No additional dependencies needed.
 
+## Token Storage
+
+The SDK does **not** persist tokens. The frontend must:
+
+1. After sign-in: save both `accessToken` and `refreshToken` to `localStorage`
+2. On page load: read tokens from `localStorage` and call `client.setTokens()`
+3. On auto-refresh: update `localStorage` via `onTokenRefreshed` callback
+4. On logout / auth expiry: clear `localStorage`
+
 ## Integration
 
-### React Hook Example
+### Setup with Callbacks
+
+```tsx
+import { CubeBackendClient, AuthTokens } from "@cubee_ee/sdk";
+
+const STORAGE_KEY_ACCESS = "cubee_access_token";
+const STORAGE_KEY_REFRESH = "cubee_refresh_token";
+
+const client = new CubeBackendClient({
+  apiEndpoint: "https://api.cubee.ee",
+
+  // Called when SDK auto-refreshes tokens after a 401
+  onTokenRefreshed: (tokens: AuthTokens) => {
+    localStorage.setItem(STORAGE_KEY_ACCESS, tokens.accessToken);
+    localStorage.setItem(STORAGE_KEY_REFRESH, tokens.refreshToken);
+  },
+
+  // Called when both tokens are expired — user must re-sign
+  onAuthExpired: () => {
+    localStorage.removeItem(STORAGE_KEY_ACCESS);
+    localStorage.removeItem(STORAGE_KEY_REFRESH);
+    // Trigger re-authentication UI (e.g. show "Sign in" button)
+  },
+});
+
+// Restore tokens on page load
+const savedAccess = localStorage.getItem(STORAGE_KEY_ACCESS);
+const savedRefresh = localStorage.getItem(STORAGE_KEY_REFRESH);
+if (savedAccess && savedRefresh) {
+  client.setTokens(savedAccess, savedRefresh);
+}
+```
+
+### Sign-In Hook
 
 ```tsx
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useCallback, useRef } from "react";
-import { CubeBackendClient } from "@cubee_ee/sdk";
-
-// Use a shared client instance (or create via your SDK setup)
-const client = new CubeBackendClient({
-  apiEndpoint: "https://api.cubee.ee",
-});
+import { useCallback } from "react";
 
 export function useAuth() {
   const { publicKey, signMessage } = useWallet();
-  const tokenRef = useRef<string | null>(null);
 
   const signIn = useCallback(async () => {
     if (!publicKey || !signMessage) {
@@ -41,104 +77,80 @@ export function useAuth() {
 
     // 1. Request nonce
     const nonceRes = await client.getNonce(publicKey.toBase58());
-    if (!nonceRes.ok) {
-      throw new Error(nonceRes.error.humanMessage);
-    }
+    if (!nonceRes.ok) throw new Error(nonceRes.error.humanMessage);
 
     // 2. Sign the message
     const messageBytes = new TextEncoder().encode(nonceRes.data.message);
     const signatureBytes = await signMessage(messageBytes);
-    const signatureBase64 = Buffer.from(signatureBytes).toString("base64");
+    const signatureBase64 = btoa(String.fromCharCode(...signatureBytes));
 
-    // 3. Verify and get JWT
+    // 3. Verify and get tokens
     const authRes = await client.verifySignature(
       nonceRes.data.message,
       signatureBase64,
     );
-    if (!authRes.ok) {
-      throw new Error(authRes.error.humanMessage);
-    }
+    if (!authRes.ok) throw new Error(authRes.error.humanMessage);
 
-    // 4. Set token for future requests
-    client.setAccessToken(authRes.data.accessToken);
-    tokenRef.current = authRes.data.accessToken;
+    // 4. Persist tokens and set on client
+    localStorage.setItem(STORAGE_KEY_ACCESS, authRes.data.accessToken);
+    localStorage.setItem(STORAGE_KEY_REFRESH, authRes.data.refreshToken);
+    client.setTokens(authRes.data.accessToken, authRes.data.refreshToken);
 
     return authRes.data;
   }, [publicKey, signMessage]);
 
   const signOut = useCallback(() => {
-    client.clearAccessToken();
-    tokenRef.current = null;
+    localStorage.removeItem(STORAGE_KEY_ACCESS);
+    localStorage.removeItem(STORAGE_KEY_REFRESH);
+    client.clearTokens();
   }, []);
 
-  return { signIn, signOut, token: tokenRef.current };
+  return { signIn, signOut };
 }
 ```
 
-### Browser Environment (no Buffer)
+## Auto-Refresh Flow
 
-If `Buffer` is not available (plain browser without polyfill), use:
+The SDK handles token refresh automatically:
 
-```ts
-const signatureBase64 = btoa(
-  String.fromCharCode(...signatureBytes),
-);
-```
+1. A request to a protected endpoint returns **401**
+2. SDK sends `POST /api/auth/refresh` with the stored refresh token
+3. If refresh succeeds:
+   - New tokens are set internally
+   - `onTokenRefreshed` callback fires (frontend updates localStorage)
+   - Original request is retried with the new access token
+4. If refresh fails (refresh token also expired):
+   - `onAuthExpired` callback fires (frontend clears storage, shows sign-in)
+   - Original request returns the error
+
+Concurrent 401s are deduplicated — only one refresh request is made.
+
+**No wallet popup is needed for refresh.** The user only sees a popup when both tokens expire and a full re-sign is required.
+
+## Token Lifecycle
+
+| Token | Lifetime | Purpose |
+|---|---|---|
+| Access token | 24 hours | Sent in `Authorization: Bearer` header |
+| Refresh token | 30 days | Used to get a new access token when it expires |
+
+When the refresh token expires, the user must re-authenticate via SIWS (one wallet popup).
 
 ## API Reference
 
 ### `client.getNonce(wallet: string)`
-
 Request a single-use nonce and pre-built SIWS message.
-
 **Returns:** `SdkResult<{ nonce: string; message: string }>`
 
 ### `client.verifySignature(message: string, signature: string)`
+Submit the signed message to receive tokens.
+**Returns:** `SdkResult<AuthTokens>`
 
-Submit the signed message and base64-encoded signature.
+### `client.setTokens(accessToken: string, refreshToken: string)`
+Set both tokens. Call after sign-in and on page load (restore from storage).
 
-**Returns:** `SdkResult<{ accessToken: string; wallet: string; expiresIn: string }>`
-
-### `client.setAccessToken(token: string)`
-
-Set the JWT for all subsequent requests. Adds `Authorization: Bearer {token}` header.
-
-### `client.clearAccessToken()`
-
-Remove the JWT (logout). Subsequent requests are unauthenticated.
-
-## Token Lifecycle
-
-- **Expiration:** 24 hours by default
-- **No refresh token.** Wallet-based auth doesn't need one — re-signing is instant (one popup).
-- **Storage:** Store the token in memory or `sessionStorage`. Avoid `localStorage` for JWTs in production (XSS risk).
-
-### Handling Expired Tokens
-
-When the JWT expires, protected endpoints return **HTTP 401**. The wallet stays connected — only the JWT session is expired. The frontend should:
-
-1. Catch the 401
-2. Automatically call `signIn()` again (nonce + signMessage + verify)
-3. Retry the original request with the new token
-
-The user sees a single wallet popup to re-sign. No disconnect/reconnect needed.
-
-```tsx
-async function authenticatedRequest<T>(
-  request: () => Promise<SdkResult<T>>,
-  signIn: () => Promise<void>,
-): Promise<SdkResult<T>> {
-  const res = await request();
-
-  // If 401 — token expired, re-authenticate and retry once
-  if (!res.ok && res.error.humanMessage.includes("HTTP 401")) {
-    await signIn();
-    return request();
-  }
-
-  return res;
-}
-```
+### `client.clearTokens()`
+Remove both tokens (logout).
 
 ## Error Handling
 

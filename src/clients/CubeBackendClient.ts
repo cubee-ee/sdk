@@ -6,6 +6,16 @@ export interface CubeBackendClientParams {
   apiEndpoint: string;
   apiKey?: string;
   defaultHeaders?: Record<string, string>;
+  /**
+   * Called when tokens are refreshed automatically after a 401.
+   * The frontend should persist the new tokens (e.g. to localStorage).
+   */
+  onTokenRefreshed?: (tokens: AuthTokens) => void;
+  /**
+   * Called when both access and refresh tokens are expired/invalid.
+   * The frontend should trigger a full re-authentication (SIWS sign-in).
+   */
+  onAuthExpired?: () => void;
 }
 
 export type StatsKind =
@@ -138,8 +148,9 @@ export interface NonceResponse {
   message: string;
 }
 
-export interface AuthVerifyResponse {
+export interface AuthTokens {
   accessToken: string;
+  refreshToken: string;
   wallet: string;
   expiresIn: string;
 }
@@ -148,10 +159,18 @@ export interface AuthVerifyResponse {
  * REST wrapper around the Cube backend. Every method is a SdkResult; no
  * exceptions escape. If a request fails, the result carries a
  * human-readable error plus the original cause.
+ *
+ * Auto-refresh: when a request gets 401, the client automatically tries
+ * to refresh tokens via POST /api/auth/refresh. If successful, the
+ * original request is retried once with the new access token.
  */
 export class CubeBackendClient {
   private readonly endpoint: string;
   private readonly headers: Record<string, string>;
+  private refreshToken: string | null = null;
+  private refreshInFlight: Promise<boolean> | null = null;
+  private readonly onTokenRefreshed?: (tokens: AuthTokens) => void;
+  private readonly onAuthExpired?: () => void;
 
   constructor(params: CubeBackendClientParams) {
     this.endpoint = params.apiEndpoint.replace(/\/$/, "");
@@ -160,6 +179,8 @@ export class CubeBackendClient {
       ...(params.apiKey ? { Authorization: `Bearer ${params.apiKey}` } : {}),
       ...(params.defaultHeaders ?? {}),
     };
+    this.onTokenRefreshed = params.onTokenRefreshed;
+    this.onAuthExpired = params.onAuthExpired;
   }
 
   listPools(): Promise<SdkResult<PoolSummary[]>> {
@@ -302,37 +323,81 @@ export class CubeBackendClient {
     );
   }
 
-  /** Submit signed SIWS message to receive a JWT access token. */
+  /** Submit signed SIWS message to receive access + refresh tokens. */
   verifySignature(
     message: string,
     signature: string,
-  ): Promise<SdkResult<AuthVerifyResponse>> {
-    return this.post<AuthVerifyResponse>("/api/auth/verify", {
+  ): Promise<SdkResult<AuthTokens>> {
+    return this.post<AuthTokens>("/api/auth/verify", {
       message,
       signature,
     });
   }
 
-  /** Set the JWT token for subsequent authenticated requests. */
+  /**
+   * Set both tokens. Call this after verifySignature() and on app init
+   * (restoring tokens from storage).
+   */
+  setTokens(accessToken: string, refreshToken: string): void {
+    this.headers["Authorization"] = `Bearer ${accessToken}`;
+    this.refreshToken = refreshToken;
+  }
+
+  /** Clear both tokens (logout). */
+  clearTokens(): void {
+    delete this.headers["Authorization"];
+    this.refreshToken = null;
+  }
+
+  /** @deprecated Use setTokens() instead. */
   setAccessToken(token: string): void {
     this.headers["Authorization"] = `Bearer ${token}`;
   }
 
-  /** Clear the JWT token (logout). */
+  /** @deprecated Use clearTokens() instead. */
   clearAccessToken(): void {
     delete this.headers["Authorization"];
+    this.refreshToken = null;
   }
 
   /** Generic GET with retry. Callers that need it for other endpoints. */
   get<T>(path: string): Promise<SdkResult<T>> {
-    return this.request<T>("GET", path);
+    return this.requestWithRefresh<T>("GET", path);
   }
 
   post<T>(path: string, body: unknown): Promise<SdkResult<T>> {
-    return this.request<T>("POST", path, body);
+    return this.requestWithRefresh<T>("POST", path, body);
   }
 
-  private async request<T>(
+  // ── Private: HTTP layer with auto-refresh ──
+
+  /**
+   * Core request method with auto-refresh on 401.
+   * If a request gets 401 and we have a refresh token:
+   *   1. Call POST /api/auth/refresh (deduplicated if concurrent)
+   *   2. On success: update tokens, notify via callback, retry original request
+   *   3. On failure: notify via onAuthExpired callback, return original error
+   */
+  private async requestWithRefresh<T>(
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+  ): Promise<SdkResult<T>> {
+    const result = await this.rawRequest<T>(method, path, body);
+
+    // Don't auto-refresh for auth endpoints themselves
+    const isAuthPath = path.startsWith("/api/auth/");
+    if (!isAuthPath && !result.ok && this.is401(result) && this.refreshToken) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        return this.rawRequest<T>(method, path, body);
+      }
+    }
+
+    return result;
+  }
+
+  private async rawRequest<T>(
     method: "GET" | "POST",
     path: string,
     body?: unknown
@@ -346,12 +411,56 @@ export class CubeBackendClient {
     const raw = await safeCall(async () => {
       const res = await fetch(url, fetchOpts);
       if (!res.ok) {
-        throw new Error(`${method} ${path} → HTTP ${res.status} ${res.statusText}`);
+        const error = new Error(
+          `${method} ${path} → HTTP ${res.status} ${res.statusText}`,
+        );
+        (error as any).status = res.status;
+        throw error;
       }
       return (await res.json()) as T;
     });
     if (!raw.ok) return raw;
     return ok(raw.data);
+  }
+
+  /**
+   * Attempt to refresh tokens. Returns true if successful.
+   * Deduplicates concurrent refresh attempts.
+   */
+  private async tryRefresh(): Promise<boolean> {
+    // Deduplicate: if a refresh is already in flight, wait for it
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+
+    this.refreshInFlight = this.doRefresh();
+    try {
+      return await this.refreshInFlight;
+    } finally {
+      this.refreshInFlight = null;
+    }
+  }
+
+  private async doRefresh(): Promise<boolean> {
+    const res = await this.rawRequest<AuthTokens>("POST", "/api/auth/refresh", {
+      refreshToken: this.refreshToken,
+    });
+
+    if (res.ok) {
+      this.setTokens(res.data.accessToken, res.data.refreshToken);
+      this.onTokenRefreshed?.(res.data);
+      return true;
+    }
+
+    // Refresh failed — both tokens are dead
+    this.clearTokens();
+    this.onAuthExpired?.();
+    return false;
+  }
+
+  private is401(result: SdkResult<unknown>): boolean {
+    if (result.ok) return false;
+    return result.error.humanMessage.includes("HTTP 401");
   }
 
   /**
