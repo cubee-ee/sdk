@@ -131,6 +131,19 @@ export interface LeaderboardEpochResponse {
   epochs: EpochHistoryEntry[];
 }
 
+// ── Auth types ──
+
+export interface NonceResponse {
+  nonce: string;
+  message: string;
+}
+
+export interface AuthVerifyResponse {
+  accessToken: string;
+  wallet: string;
+  expiresIn: string;
+}
+
 /**
  * REST wrapper around the Cube backend. Every method is a SdkResult; no
  * exceptions escape. If a request fails, the result carries a
@@ -278,6 +291,36 @@ export class CubeBackendClient {
     const qs = new URLSearchParams({ window, unit });
     if (poolAddr) qs.set("pool", poolAddr);
     return this.get<StatsSeries>(`/api/stats/${kind}?${qs.toString()}`);
+  }
+
+  // ── Auth ──
+
+  /** Request a SIWS nonce + pre-built message for the given wallet. */
+  getNonce(wallet: string): Promise<SdkResult<NonceResponse>> {
+    return this.get<NonceResponse>(
+      `/api/auth/nonce?wallet=${encodeURIComponent(wallet)}`,
+    );
+  }
+
+  /** Submit signed SIWS message to receive a JWT access token. */
+  verifySignature(
+    message: string,
+    signature: string,
+  ): Promise<SdkResult<AuthVerifyResponse>> {
+    return this.post<AuthVerifyResponse>("/api/auth/verify", {
+      message,
+      signature,
+    });
+  }
+
+  /** Set the JWT token for subsequent authenticated requests. */
+  setAccessToken(token: string): void {
+    this.headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  /** Clear the JWT token (logout). */
+  clearAccessToken(): void {
+    delete this.headers["Authorization"];
   }
 
   /** Generic GET with retry. Callers that need it for other endpoints. */
