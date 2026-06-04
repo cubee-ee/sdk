@@ -79,6 +79,11 @@ export {
   computeTwoTokenOptimalAllocations,
 } from "./math/singleToken";
 export { applySlippage, applySwapFee, lpBalances, priceImpactHbps } from "./math/slippage";
+export {
+  computeSelloffStatus,
+  computeSelloffStatusForToken,
+  formatWindowDuration,
+} from "./math/maxSelloff";
 export { RpcClient } from "./clients/RpcClient";
 export { CubeBackendClient } from "./clients/CubeBackendClient";
 export { CubicPoolClient } from "./clients/CubicPoolClient";
@@ -145,6 +150,10 @@ export type {
 export type {
   AllocationResult,
 } from "./math/singleToken";
+export type {
+  RawSelloffState,
+  SelloffStatus,
+} from "./math/maxSelloff";
 export type {
   RawPoolAccount,
   RawMintAccount,
