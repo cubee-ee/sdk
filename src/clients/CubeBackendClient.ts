@@ -141,6 +141,48 @@ export interface LeaderboardEpochResponse {
   epochs: EpochHistoryEntry[];
 }
 
+// ── Referral types ──
+
+export interface ReferralBindResponse {
+  referrer: string;
+  bound: true;
+}
+
+export interface ReferralRates {
+  l1Percent: number;
+  l2Percent: number;
+}
+
+export interface ReferralStats {
+  totalReferrals: number;
+  l1Count: number;
+  l2Count: number;
+  totalBonusPoints: number;
+  l1BonusPoints: number;
+  l2BonusPoints: number;
+}
+
+export interface ReferralStatusResponse {
+  referredBy: string | null;
+  referralCode: string;
+  customCodes: string[];
+  rates: ReferralRates;
+  stats: ReferralStats;
+}
+
+export interface ReferralEntry {
+  address: string;
+  points: number;
+  boundAt: string;
+}
+
+export interface ReferralListResponse {
+  total: number;
+  page: number;
+  limit: number;
+  data: ReferralEntry[];
+}
+
 // ── Auth types ──
 
 export interface NonceResponse {
@@ -312,6 +354,43 @@ export class CubeBackendClient {
     const qs = new URLSearchParams({ window, unit });
     if (poolAddr) qs.set("pool", poolAddr);
     return this.get<StatsSeries>(`/api/stats/${kind}?${qs.toString()}`);
+  }
+
+  // ── Referral ──
+
+  /**
+   * Bind the authenticated user as a referral of the given referrer.
+   * The code can be a wallet address or a custom referral code.
+   * Requires authentication (setTokens must be called first).
+   */
+  bindReferral(code: string): Promise<SdkResult<ReferralBindResponse>> {
+    return this.post<ReferralBindResponse>("/api/referral/bind", { code });
+  }
+
+  /**
+   * Get the authenticated user's referral status: referrer, referral code,
+   * custom codes, bonus rates (L1/L2 %), and aggregated stats.
+   * Requires authentication.
+   */
+  getReferralStatus(): Promise<SdkResult<ReferralStatusResponse>> {
+    return this.get<ReferralStatusResponse>("/api/referral/my");
+  }
+
+  /**
+   * Get a paginated list of the authenticated user's direct referrals (L1).
+   * Requires authentication.
+   */
+  getMyReferrals(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<SdkResult<ReferralListResponse>> {
+    const qs = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    return this.get<ReferralListResponse>(
+      `/api/referral/my/referrals?${qs.toString()}`,
+    );
   }
 
   // ── Auth ──
