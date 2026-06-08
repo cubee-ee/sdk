@@ -141,6 +141,13 @@ export interface LeaderboardEpochResponse {
   epochs: EpochHistoryEntry[];
 }
 
+export interface LeaderboardStatsResponse {
+  /** Total number of users in the leaderboard */
+  totalUsers: number;
+  /** Sum of all XP points across all users */
+  totalXp: number;
+}
+
 // ── Referral types ──
 
 export interface ReferralBindResponse {
@@ -341,6 +348,11 @@ export class CubeBackendClient {
 
   getLeaderboardEpoch(): Promise<SdkResult<LeaderboardEpochResponse>> {
     return this.get<LeaderboardEpochResponse>("/api/leaderboard/epoch");
+  }
+
+  /** Get overall leaderboard stats: total users and total XP. */
+  getLeaderboardStats(): Promise<SdkResult<LeaderboardStatsResponse>> {
+    return this.get<LeaderboardStatsResponse>("/api/leaderboard/stats");
   }
 
   getTokenPrices(mints: string[]): Promise<SdkResult<PriceMap>> {
