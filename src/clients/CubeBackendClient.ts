@@ -171,8 +171,11 @@ export interface ReferralStatusResponse {
 }
 
 export interface ReferralEntry {
+  /** Wallet address of the referral */
   address: string;
-  points: number;
+  /** Total bonus XP this referral has earned for you */
+  earnedBonusXp: number;
+  /** When this user became your referral */
   boundAt: string;
 }
 

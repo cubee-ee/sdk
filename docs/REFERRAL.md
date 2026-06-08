@@ -98,7 +98,7 @@ const page1 = await client.getMyReferrals(1, 20);
 if (page1.ok) {
   console.log(`Total referrals: ${page1.data.total}`);
   for (const ref of page1.data.data) {
-    console.log(`${ref.address} — ${ref.points} XP — bound ${ref.boundAt}`);
+    console.log(`${ref.address} — earned you ${ref.earnedBonusXp} XP — bound ${ref.boundAt}`);
   }
 
   // Load next page
@@ -165,8 +165,11 @@ interface ReferralListResponse {
   page: number;
   limit: number;
   data: Array<{
+    /** Wallet address of the referral */
     address: string;
-    points: number;
+    /** Total bonus XP this referral has earned for you */
+    earnedBonusXp: number;
+    /** When this user became your referral */
     boundAt: string;
   }>;
 }
