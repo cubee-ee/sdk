@@ -71,6 +71,8 @@ describe("tx-builders.removeLiquidity", () => {
     const tx = buildRemoveLiquidityTx(cfg, pool, {
       user,
       bptAmount: new BN(1000),
+      // explicit per-token floors now required; zeros = intentional opt-out
+      minimumTokenAmounts: pool.tokens.map(() => new BN(0)),
     });
 
     expect(tx.instructions).toHaveLength(1 + pool.tokenCount + 1);
@@ -112,6 +114,7 @@ describe("tx-builders discriminators", () => {
     const removeTx = buildRemoveLiquidityTx(cfg, pool, {
       user,
       bptAmount: new BN(1000),
+      minimumTokenAmounts: pool.tokens.map(() => new BN(0)),
     });
     const remove = removeTx.instructions[removeTx.instructions.length - 1];
 
