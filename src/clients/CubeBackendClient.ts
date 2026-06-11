@@ -289,8 +289,21 @@ export class CubeBackendClient {
     return this.getDataField<T>(`/api/pools/${addr}/tx-stats`);
   }
 
-  getTransactions<T>(addr: string, limit: number = 20, offset: number = 0): Promise<SdkResult<T>> {
-    const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  getTransactions<T>(
+    addr: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+      type?: "swap" | "add_liquidity" | "remove_liquidity";
+      user?: string;
+    },
+  ): Promise<SdkResult<T>> {
+    const qs = new URLSearchParams({
+      limit: String(options?.limit ?? 20),
+      offset: String(options?.offset ?? 0),
+    });
+    if (options?.type) qs.set("type", options.type);
+    if (options?.user) qs.set("user", options.user);
     return this.getDataField<T>(`/api/pools/${addr}/transactions?${qs.toString()}`);
   }
 
