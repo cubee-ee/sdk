@@ -452,10 +452,13 @@ export class CubicPoolClient {
   buildRemoveLiquidityTx(params: RemoveLiquidityParams): SdkResult<BuiltTx> {
     const poolRes = this.requireCache();
     if (!poolRes.ok) return poolRes;
-    if (
-      params.minimumTokenAmounts &&
-      params.minimumTokenAmounts.length !== poolRes.data.tokenCount
-    ) {
+    if (!params.minimumTokenAmounts) {
+      return err(
+        "invalid_input",
+        "minimumTokenAmounts is required (one per token). Derive per-token floors from quoteRemove(); pass explicit zeros only to intentionally disable slippage protection."
+      );
+    }
+    if (params.minimumTokenAmounts.length !== poolRes.data.tokenCount) {
       return err("invalid_input", "minimumTokenAmounts length must equal pool.tokenCount");
     }
     try {

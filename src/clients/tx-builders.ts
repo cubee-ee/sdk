@@ -80,6 +80,34 @@ function requirePositiveMinimumBpt(minimumBptAmount: BN | undefined, ixName: str
   return minimumBptAmount;
 }
 
+/**
+ * Require an explicit per-token slippage floor for remove_liquidity.
+ *
+ * Previously this defaulted to all-zero when omitted, which silently shipped
+ * a remove tx with NO slippage protection (sandwich/MEV exposure). Callers
+ * must now pass `minimumTokenAmounts` (derive them from a fresh `quoteRemove()`
+ * minus tolerance). To intentionally disable protection, pass explicit zeros.
+ */
+function requireExplicitMinimums(
+  minimumTokenAmounts: BN[] | undefined,
+  tokenCount: number,
+  ixName: string
+): BN[] {
+  if (!minimumTokenAmounts) {
+    throw new Error(
+      `${ixName}: minimumTokenAmounts must be provided (one per token). ` +
+        `Derive per-token floors from a fresh quoteRemove(); pass explicit zeros ` +
+        `only to intentionally disable slippage protection.`
+    );
+  }
+  if (minimumTokenAmounts.length !== tokenCount) {
+    throw new Error(
+      `${ixName}: minimumTokenAmounts length (${minimumTokenAmounts.length}) must equal token count (${tokenCount})`
+    );
+  }
+  return minimumTokenAmounts;
+}
+
 // ============================================================
 // Swap
 // ============================================================
@@ -219,7 +247,7 @@ export function buildRemoveLiquidityIx(
   params: RemoveLiquidityParams
 ): TransactionInstruction {
   const userBpt = deriveAta(params.user, pool.bptMint, TOKEN_PROGRAM_ID);
-  const mins = params.minimumTokenAmounts ?? pool.tokens.map(() => new BN(0));
+  const mins = requireExplicitMinimums(params.minimumTokenAmounts, pool.tokenCount, "remove_liquidity");
 
   const data = Buffer.concat([
     CUBIC_POOL_DISC.removeLiquidity,
