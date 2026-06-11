@@ -389,10 +389,22 @@ export class CubeBackendClient {
   /**
    * Bind the authenticated user as a referral of the given referrer.
    * The code can be a wallet address or a custom referral code.
+   * Optionally pass UTM parameters from the referral link for analytics.
    * Requires authentication (setTokens must be called first).
    */
-  bindReferral(code: string): Promise<SdkResult<ReferralBindResponse>> {
-    return this.post<ReferralBindResponse>("/api/referral/bind", { code });
+  bindReferral(
+    code: string,
+    utm?: {
+      source?: string;
+      medium?: string;
+      campaign?: string;
+      content?: string;
+      term?: string;
+    },
+  ): Promise<SdkResult<ReferralBindResponse>> {
+    const body: Record<string, unknown> = { code };
+    if (utm) body.utm = utm;
+    return this.post<ReferralBindResponse>("/api/referral/bind", body);
   }
 
   /**
