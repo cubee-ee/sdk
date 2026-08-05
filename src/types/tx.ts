@@ -25,6 +25,12 @@ export interface SwapQuote {
   protocolFeeAmount: BN;
   /** Minimum amount_out to pass to the swap ix given the quoted slippage. */
   minAmountOut: BN;
+  /** Variable sell-off surge fee taken from the output. `0` when no surge. */
+  surgeFeeAmount: BN;
+  /** Static fee (in PERCENT_SCALE units) + surge pct, for UI display. */
+  effectiveFeePct: number;
+  /** Post-trade window fill in PERCENT_SCALE units. `0` when window disabled. */
+  windowFillPct: number;
 }
 
 export interface AddLiquidityParams {
@@ -84,4 +90,15 @@ export interface DeployPoolParams {
   swapFeeRate: number;
   /** SPL Token program to use for the BPT mint (classic SPL Token recommended). */
   bptTokenProgram?: PublicKey;
+  /**
+   * Optional creator-chosen Token-2022 banned-extensions bitmap. Omit
+   * (`undefined`/`null`) to inherit the config default. Set a bitmap to vet
+   * THIS pool's tokens against it and store it on the pool. `0` allows every
+   * extension.
+   *
+   * ⚠ A permissive policy (un-banning PermanentDelegate / TransferHook /
+   * TransferFee) makes the pool drainable/abusable by the token issuer —
+   * surface this to the user before deploying.
+   */
+  bannedExtensions?: BN | number | null;
 }

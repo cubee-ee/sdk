@@ -1,4 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 import { BorshReader } from "./borsh";
 import { CubicPoolEvent } from "../types/events";
 
@@ -27,6 +28,7 @@ const DISC = {
   PoolStateLog:             Buffer.from([59, 254, 237, 111, 163, 10, 140, 224]),
   PoolInfo:                 Buffer.from([207, 20, 87, 97, 251, 212, 234, 45]),
   BannedExtensionsUpdated:  Buffer.from([107, 126, 13, 149, 182, 108, 139, 202]),
+  MaxSelloffWindowAdvanced: Buffer.from([229, 227, 163, 30, 22, 183, 78, 57]),
   // Stld:
   SingleTokenDeposit:       Buffer.from([215, 54, 137, 104, 219, 39, 164, 235]),
 };
@@ -80,8 +82,11 @@ function decodeEvent(name: DiscName, buf: Buffer): CubicPoolEvent | null {
       const amountOut = r.u64();
       const feeAmount = r.u64();
       const protocolFeeAmount = r.u64();
+      // v5 inserted `surge_fee_amount` before `timestamp`. v4 logs (still
+      // decoded during historical backfill) have only the timestamp left.
+      const surgeFeeAmount = r.remaining() >= 16 ? r.u64() : new BN(0);
       const timestamp = r.i64().toNumber();
-      return { kind: "Swap", pool, user, tokenIn, tokenOut, amountIn, amountOut, feeAmount, protocolFeeAmount, timestamp };
+      return { kind: "Swap", pool, user, tokenIn, tokenOut, amountIn, amountOut, feeAmount, protocolFeeAmount, surgeFeeAmount, timestamp };
     }
     case "LiquidityAdded": {
       const pool = r.pubkey();
@@ -112,7 +117,10 @@ function decodeEvent(name: DiscName, buf: Buffer): CubicPoolEvent | null {
       const tokenCount = r.u8();
       const bptMint = r.pubkey();
       const timestamp = r.i64().toNumber();
-      return { kind: "PoolInitialized", pool, config, tokenCount, bptMint, timestamp };
+      // v5 appended the effective banned-extensions bitmap (wire
+      // append-only) — absent on pre-v5 historical logs.
+      const bannedExtensions = r.remaining() >= 8 ? r.u64() : null;
+      return { kind: "PoolInitialized", pool, config, tokenCount, bptMint, timestamp, bannedExtensions };
     }
     case "PoolEnabledUpdated": {
       const pool = r.pubkey();
@@ -136,12 +144,31 @@ function decodeEvent(name: DiscName, buf: Buffer): CubicPoolEvent | null {
       const user = r.pubkey();
       const tokenInIndex = r.u8();
       const amountIn = r.u64();
-      const slippageHundredthsBps = r.u32();
-      const allocations = r.vecU64();
-      const depositedAmounts = r.vecU64();
-      const bptReceived = r.u64();
-      const dustRefunded = r.u64();
-      const timestamp = r.i64().toNumber();
+      // stld v5 removed `slippage_hundredths_bps` (u32) between `amount_in`
+      // and `allocations`. Disambiguate by test-parsing the tail as the v5
+      // layout and requiring it to consume the buffer exactly with sane vec
+      // lengths; otherwise fall back to the v4 layout.
+      const mark = r.pos();
+      const parseTail = (withSlippage: boolean) => {
+        r.seek(mark);
+        const slippage = withSlippage ? r.u32() : null;
+        const allocations = r.vecU64();
+        const depositedAmounts = r.vecU64();
+        if (allocations.length > 16 || depositedAmounts.length > 16) {
+          throw new Error("implausible token vec length");
+        }
+        const bptReceived = r.u64();
+        const dustRefunded = r.u64();
+        const timestamp = r.i64().toNumber();
+        if (r.remaining() !== 0) throw new Error("layout mismatch");
+        return { slippage, allocations, depositedAmounts, bptReceived, dustRefunded, timestamp };
+      };
+      let tail: ReturnType<typeof parseTail>;
+      try {
+        tail = parseTail(false); // v5 layout
+      } catch {
+        tail = parseTail(true); // pre-v5 historical layout
+      }
       return {
         kind: "SingleTokenDeposit",
         helper,
@@ -149,11 +176,72 @@ function decodeEvent(name: DiscName, buf: Buffer): CubicPoolEvent | null {
         user,
         tokenInIndex,
         amountIn,
-        slippageHundredthsBps,
-        allocations,
-        depositedAmounts,
-        bptReceived,
-        dustRefunded,
+        slippageHundredthsBps: tail.slippage,
+        allocations: tail.allocations,
+        depositedAmounts: tail.depositedAmounts,
+        bptReceived: tail.bptReceived,
+        dustRefunded: tail.dustRefunded,
+        timestamp: tail.timestamp,
+      };
+    }
+    case "PoolStateLog": {
+      // Layout is IDENTICAL in v4 and v5 — the full 13-field snapshot.
+      const pool = r.pubkey();
+      const tokenCount = r.u8();
+      const tokenMints = r.vecPubkey();
+      const normalizedWeights = r.vecU64();
+      const virtualBalances = r.vecU64();
+      const actualBalances = r.vecU64();
+      const bptTotalSupply = r.u64();
+      const swapFeeRate = r.u32();
+      const protocolFeeRate = r.u16();
+      const protocolFeesOwed = r.vecU64();
+      const poolEnabled = r.bool();
+      const swapsEnabled = r.bool();
+      const timestamp = r.i64().toNumber();
+      return {
+        kind: "PoolStateLog",
+        pool,
+        tokenCount,
+        tokenMints,
+        normalizedWeights,
+        virtualBalances,
+        actualBalances,
+        bptTotalSupply,
+        swapFeeRate,
+        protocolFeeRate,
+        protocolFeesOwed,
+        poolEnabled,
+        swapsEnabled,
+        timestamp,
+      };
+    }
+    case "MaxSelloffWindowAdvanced": {
+      const pool = r.pubkey();
+      const tokenIndex = r.u8();
+      const effectiveSelloff = r.u64();
+      // v5 carries pct + resolved cap + vb snapshot (3×u64) between
+      // `effective_selloff` and `previous_selloff`; v4 carried only the
+      // absolute cap. Branch on payload size: v4 = 81 bytes, v5 = 97.
+      const isV5 = buf.length >= 97;
+      const maxSelloffPct = isV5 ? r.u64() : null;
+      const maxSelloffCap = r.u64();
+      const vbSnapshot = isV5 ? r.u64() : null;
+      const previousSelloff = r.u64();
+      const currentSelloff = r.u64();
+      const windowStartTimestamp = r.i64().toNumber();
+      const timestamp = r.i64().toNumber();
+      return {
+        kind: "MaxSelloffWindowAdvanced",
+        pool,
+        tokenIndex,
+        effectiveSelloff,
+        maxSelloffPct,
+        maxSelloffCap,
+        vbSnapshot,
+        previousSelloff,
+        currentSelloff,
+        windowStartTimestamp,
         timestamp,
       };
     }
@@ -163,7 +251,6 @@ function decodeEvent(name: DiscName, buf: Buffer): CubicPoolEvent | null {
     case "ProtocolFeeRateUpdated":
     case "BannedExtensionsUpdated":
     case "DebugLiquidityWithdrawn":
-    case "PoolStateLog":
     case "PoolInfo":
       return { kind: "Unknown", name, data: { raw: buf.toString("base64") } };
   }

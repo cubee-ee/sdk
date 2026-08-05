@@ -32,8 +32,9 @@ export interface RawPoolAccount {
 
   rangeManager: PublicKey;
   rangeManagerEnabled: boolean;
-  rangeManagerMaxVbChangeBps: number;
-  rangeManagerMaxWeightChangeBps: number;
+  /** Percent-of-current-value cap, `PERCENT_SCALE` units (10_000 = 100%). */
+  rangeManagerMaxVbChangePct: number;
+  rangeManagerMaxWeightChangePct: number;
   rangeManagerMinUpdateIntervalSecs: number;
   rangeManagerLastUpdated: BN;
 
@@ -41,8 +42,21 @@ export interface RawPoolAccount {
   tokenMints: PublicKey[];
   tokenPrograms: PublicKey[];
   normalizedWeights: BN[];
-  maxSelloff: BN[];
+  /**
+   * Max cumulative sell volume per window, as a percent of the token's
+   * virtual balance (`PERCENT_SCALE` units; 10_000 = 100%). `0` disables.
+   */
+  maxSelloffPct: number[];
   maxSelloffPeriodLength: number[];
+  /** Variable surge-fee curve, per token (`PERCENT_SCALE` units). */
+  variableFeeThresholdPct: number[];
+  variableFeeSlopeLowPct: number[];
+  variableFeeSlopeHighPct: number[];
+  /**
+   * Per-token input kill switch. `false` ⇒ swaps with this token as INPUT
+   * revert (`TokenInactive`). Defaults to `true`.
+   */
+  isActive: boolean[];
 
   virtualBalances: BN[];
   actualBalances: BN[];
@@ -50,6 +64,8 @@ export interface RawPoolAccount {
   previousSelloff: BN[];
   currentSelloff: BN[];
   windowStartTimestamp: BN[];
+  /** Virtual-balance snapshot taken when the max-selloff window opened. */
+  selloffVbSnapshot: BN[];
 
   /**
    * Per-pool Address Lookup Table. `PublicKey.default` means the pool's
@@ -58,6 +74,14 @@ export interface RawPoolAccount {
    * paths.
    */
   lookupTable: PublicKey;
+
+  /**
+   * Effective Token-2022 banned-extensions bitmap this pool's tokens were
+   * vetted against at creation (creator override, or the config default).
+   * `0` ⇒ no extensions banned. Pre-upgrade pools read `0`. A permissive
+   * value is a rug-risk — surface it before depositing.
+   */
+  bannedExtensions: BN;
 }
 
 /** 8-byte anchor discriminator for CubicPool. */
@@ -65,14 +89,14 @@ export const POOL_DISCRIMINATOR_LEN = 8;
 const MAX_TOKENS = 10;
 /** Total on-chain size of a v4 CubicPool (includes the 8-byte discriminator). */
 export const POOL_V4_LEN = 1683;
-/** Pre-v4 size — accounts at this size still need `migrate_pool_v4`. */
+/** Pre-v4 size — accounts at this size still need `migrate_to_v5`. */
 export const POOL_V3_LEN = 1154;
 
 export function decodePoolAccount(data: Buffer): RawPoolAccount {
   if (data.length === POOL_V3_LEN) {
     throw new Error(
       `decodePoolAccount: account is at v3 size (${POOL_V3_LEN}). ` +
-        `Run migrate_pool_v4 against it before calling this decoder.`,
+        `Run migrate_to_v5 against it before calling this decoder.`,
     );
   }
   if (data.length !== POOL_V4_LEN) {
@@ -111,9 +135,9 @@ export function decodePoolAccount(data: Buffer): RawPoolAccount {
   off += 32;
   const rangeManagerEnabled = data.readUInt8(off) !== 0;
   off += 1;
-  const rangeManagerMaxVbChangeBps = data.readUInt16LE(off);
+  const rangeManagerMaxVbChangePct = data.readUInt16LE(off);
   off += 2;
-  const rangeManagerMaxWeightChangeBps = data.readUInt16LE(off);
+  const rangeManagerMaxWeightChangePct = data.readUInt16LE(off);
   off += 2;
   const rangeManagerMinUpdateIntervalSecs = data.readUInt32LE(off);
   off += 4;
@@ -124,14 +148,19 @@ export function decodePoolAccount(data: Buffer): RawPoolAccount {
   const tokenMints: PublicKey[] = [];
   const tokenPrograms: PublicKey[] = [];
   const normalizedWeights: BN[] = [];
-  const maxSelloff: BN[] = [];
+  const maxSelloffPct: number[] = [];
   const maxSelloffPeriodLength: number[] = [];
+  const variableFeeThresholdPct: number[] = [];
+  const variableFeeSlopeLowPct: number[] = [];
+  const variableFeeSlopeHighPct: number[] = [];
+  const isActive: boolean[] = [];
   const virtualBalances: BN[] = [];
   const actualBalances: BN[] = [];
   const protocolFeesOwed: BN[] = [];
   const previousSelloff: BN[] = [];
   const currentSelloff: BN[] = [];
   const windowStartTimestamp: BN[] = [];
+  const selloffVbSnapshot: BN[] = [];
 
   for (let i = 0; i < MAX_TOKENS; i++) {
     // AssetConfig — 88 bytes
@@ -141,11 +170,19 @@ export function decodePoolAccount(data: Buffer): RawPoolAccount {
     off += 32;
     normalizedWeights.push(readU64LE(data, off));
     off += 8;
-    maxSelloff.push(readU64LE(data, off));
-    off += 8;
+    maxSelloffPct.push(data.readUInt16LE(off));
+    off += 2;
     maxSelloffPeriodLength.push(data.readUInt32LE(off));
     off += 4;
-    off += 4; // AssetConfig.reserved
+    variableFeeThresholdPct.push(data.readUInt16LE(off));
+    off += 2;
+    variableFeeSlopeLowPct.push(data.readUInt16LE(off));
+    off += 2;
+    variableFeeSlopeHighPct.push(data.readUInt16LE(off));
+    off += 2;
+    isActive.push(data.readUInt8(off) !== 0);
+    off += 1;
+    off += 3; // AssetConfig.reserved[3]
 
     // AssetDynamics — 56 bytes
     virtualBalances.push(readU64LE(data, off));
@@ -160,13 +197,18 @@ export function decodePoolAccount(data: Buffer): RawPoolAccount {
     off += 8;
     windowStartTimestamp.push(readI64LE(data, off));
     off += 8;
-    off += 8; // AssetDynamics.reserved
+    selloffVbSnapshot.push(readU64LE(data, off));
+    off += 8; // AssetDynamics.selloff_vb_snapshot
   }
 
   const lookupTable = readPubkey(data, off);
   off += 32;
 
-  // Trailing `reserved[32]` ignored.
+  // Effective per-pool Token-2022 banned-extensions bitmap (carved out of
+  // the old reserved[32]; pre-upgrade pools read 0). Trailing reserved[24]
+  // is ignored.
+  const bannedExtensions = readU64LE(data, off);
+  off += 8;
 
   return {
     config,
@@ -182,22 +224,28 @@ export function decodePoolAccount(data: Buffer): RawPoolAccount {
     pendingPoolAdmin,
     rangeManager,
     rangeManagerEnabled,
-    rangeManagerMaxVbChangeBps,
-    rangeManagerMaxWeightChangeBps,
+    rangeManagerMaxVbChangePct,
+    rangeManagerMaxWeightChangePct,
     rangeManagerMinUpdateIntervalSecs,
     rangeManagerLastUpdated,
     tokenMints,
     tokenPrograms,
     normalizedWeights,
-    maxSelloff,
+    maxSelloffPct,
     maxSelloffPeriodLength,
+    variableFeeThresholdPct,
+    variableFeeSlopeLowPct,
+    variableFeeSlopeHighPct,
+    isActive,
     virtualBalances,
     actualBalances,
     protocolFeesOwed,
     previousSelloff,
     currentSelloff,
     windowStartTimestamp,
+    selloffVbSnapshot,
     lookupTable,
+    bannedExtensions,
   };
 }
 

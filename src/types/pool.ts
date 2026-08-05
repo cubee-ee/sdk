@@ -23,6 +23,17 @@ export interface PoolTokenInfo {
   metadata?: TokenInfo;
   /** factBalance / virtBalance as a float, for display/math. */
   concentration: number;
+  /**
+   * Per-token input kill switch. When `false`, swaps with THIS token as
+   * input revert (`TokenInactive`); it can still be a swap output and
+   * liquidity ops are unaffected. Defaults to `true`.
+   */
+  isActive: boolean;
+  /**
+   * Max cumulative sell volume per window, as a percent of virtual balance
+   * (`PERCENT_SCALE` units; 10_000 = 100%). `0` ⇒ no cap.
+   */
+  maxSelloffPct: number;
 }
 
 /**
@@ -56,6 +67,12 @@ export interface PoolInfo {
    * v0-tx builders compress per-token accounts via this ALT.
    */
   lookupTable: PublicKey;
+  /**
+   * Effective Token-2022 banned-extensions bitmap this pool's tokens were
+   * vetted against at creation. `0` ⇒ nothing banned (permissive — rug risk;
+   * surface to users before they deposit).
+   */
+  bannedExtensions: BN;
   /** Unix timestamp (ms) when sync() ran. Useful for staleness checks. */
   syncedAt: number;
 }
